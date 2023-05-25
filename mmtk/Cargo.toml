@@ -1,11 +1,11 @@
 [package]
-name = "mmtk_scalanative"
+name = "mmtk_scala_native"
 version = "0.0.1"
 authors = [" <>"]
 edition = "2021"
 
 [lib]
-name = "mmtk_scalanative"
+name = "mmtk_scala_native"
 # be careful - LTO is only allowed for certain crate types
 crate-type = ["cdylib"]
 
@@ -13,7 +13,8 @@ crate-type = ["cdylib"]
 lto = true
 
 [dependencies]
-mmtk = { path = "../../mmtk-core" }
+mmtk = { path = "../../mmtk-core", version = "*" }
+# mmtk = { git = "https://github.com/mmtk/mmtk-core.git", rev = "df146b7af6cf41cc7d6996e1ca538fd2b32950f5" }
 libc = "0.2"
 lazy_static = "1.1"
 atomic_refcell = "0.1.7"
@@ -25,3 +26,4 @@ default = []
 is_mmtk_object = ["mmtk/is_mmtk_object"]
 malloc_counted_size = ["mmtk/malloc_counted_size"]
 malloc_mark_sweep = ["mmtk/malloc_mark_sweep"]
+nogc = []

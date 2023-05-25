@@ -30,6 +30,14 @@ impl Scanning<DummyVM> for VMScanning {
     ) {
         unimplemented!()
     }
+    // fn scan_object_with_klass(
+    //         _tls: VMWorkerThread,
+    //         _object: ObjectReference,
+    //         _edge_visitor: &mut impl EdgeVisitor<<DummyVM as mmtk::vm::VMBinding>::VMEdge>,
+    //         _klass: mmtk::util::Address,
+    //     ) {
+    //     unimplemented!()
+    // }
     fn notify_initial_thread_scan_complete(_partial_scan: bool, _tls: VMWorkerThread) {
         unimplemented!()
     }

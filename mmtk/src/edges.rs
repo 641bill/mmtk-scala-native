@@ -55,6 +55,10 @@ impl MemorySlice for DummyVMMemorySlice {
         }
     }
 
+    fn object(&self) -> Option<ObjectReference> {
+        unimplemented!()
+    }
+
     fn start(&self) -> Address {
         Address::from_ptr(unsafe { (*self.0).as_ptr_range().start })
     }
@@ -78,6 +82,16 @@ impl MemorySlice for DummyVMMemorySlice {
             std::ptr::copy(src, tgt, words)
         }
     }
+
+    // Dummy implementations for missing trait items
+    // type ChunkIterator = DummyVMMemorySliceChunkIterator;
+    // fn chunks(&self, _: usize) -> Self::ChunkIterator {
+    //     todo!()
+    // }
+
+    // fn len(&self) -> usize {
+    //     todo!()
+    // }
 }
 
 pub struct DummyVMMemorySliceIterator {
@@ -98,6 +112,16 @@ impl Iterator for DummyVMMemorySliceIterator {
                 Address::from_ptr(edge),
             )))
         }
+    }
+}
+
+pub struct DummyVMMemorySliceChunkIterator;
+
+impl Iterator for DummyVMMemorySliceChunkIterator {
+    type Item = DummyVMMemorySlice;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        todo!()
     }
 }
 

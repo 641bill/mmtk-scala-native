@@ -11,6 +11,7 @@ pub const OBJECT_REF_OFFSET: usize = 4;
 
 impl ObjectModel<DummyVM> for VMObjectModel {
     const GLOBAL_LOG_BIT_SPEC: VMGlobalLogBitSpec = VMGlobalLogBitSpec::in_header(0);
+    // const GLOBAL_FIELD_UNLOG_BIT_SPEC: VMGlobalFieldUnlogBitSpec = VMGlobalFieldUnlogBitSpec::in_header(0);
     const LOCAL_FORWARDING_POINTER_SPEC: VMLocalForwardingPointerSpec = VMLocalForwardingPointerSpec::in_header(0);
     const LOCAL_FORWARDING_BITS_SPEC: VMLocalForwardingBitsSpec = VMLocalForwardingBitsSpec::in_header(0);
     const LOCAL_MARK_BIT_SPEC: VMLocalMarkBitSpec = VMLocalMarkBitSpec::in_header(0);
@@ -74,4 +75,16 @@ impl ObjectModel<DummyVM> for VMObjectModel {
     fn dump_object(_object: ObjectReference) {
         unimplemented!()
     }
+    
+    // fn dump_object_s(object: mmtk::util::ObjectReference) -> String {
+    //     // This method should return a string representation of the object.
+    //     // Replace this with your own implementation.
+    //     format!("{:?}", object)
+    // }
+
+    // fn get_class_pointer(_object: mmtk::util::ObjectReference) -> mmtk::util::Address {
+    //     // This method should return the address of the class of the object.
+    //     // Replace this with your own implementation.
+    //     unimplemented!()
+    // }
 }

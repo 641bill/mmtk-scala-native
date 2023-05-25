@@ -134,6 +134,7 @@ pub extern "C" fn mmtk_modify_check(object: ObjectReference) {
 #[no_mangle]
 pub extern "C" fn mmtk_handle_user_collection_request(tls: VMMutatorThread) {
     memory_manager::handle_user_collection_request::<DummyVM>(&SINGLETON, tls);
+    // memory_manager::handle_user_collection_request::<DummyVM>(&SINGLETON, tls, false);
 }
 
 #[no_mangle]

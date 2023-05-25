@@ -153,6 +153,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "delegate"
+version = "0.9.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d358e0ec5c59a5e1603b933def447096886121660fc680dc1e64a0753981fe3c"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn 1.0.109",
+]
+
+[[package]]
 name = "downcast-rs"
 version = "1.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -356,9 +367,9 @@ dependencies = [
 
 [[package]]
 name = "linux-raw-sys"
-version = "0.3.6"
+version = "0.3.8"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b64f40e5e03e0d54f03845c8197d0291253cdbedfb1cb46b13c2c117554a9f4c"
+checksum = "ef53942eb7bf7ff43a617b3e2c1c4a5ecf5944a7c1bc12d7ee39bbb15e5c1519"
 
 [[package]]
 name = "lock_api"
@@ -396,7 +407,7 @@ dependencies = [
 
 [[package]]
 name = "mmtk"
-version = "0.17.0"
+version = "0.18.0"
 dependencies = [
  "atomic",
  "atomic-traits",
@@ -404,6 +415,7 @@ dependencies = [
  "built",
  "cfg-if",
  "crossbeam",
+ "delegate",
  "downcast-rs",
  "enum-map",
  "env_logger",
@@ -424,7 +436,7 @@ dependencies = [
 
 [[package]]
 name = "mmtk-macros"
-version = "0.17.0"
+version = "0.18.0"
 dependencies = [
  "proc-macro-error",
  "proc-macro2",
@@ -433,7 +445,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "mmtk_scalanative"
+name = "mmtk_scala_native"
 version = "0.0.1"
 dependencies = [
  "atomic",
@@ -481,9 +493,9 @@ dependencies = [
 
 [[package]]
 name = "pkg-config"
-version = "0.3.26"
+version = "0.3.27"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "6ac9a59f73473f1b8d852421e59e64809f025994837ef743615c6d0c5b305160"
+checksum = "26072860ba924cbfa98ea39c8c19b4dd6a4a25423dbdf219c1eca91aa0cf6964"
 
 [[package]]
 name = "proc-macro-error"
@@ -511,18 +523,18 @@ dependencies = [
 
 [[package]]
 name = "proc-macro2"
-version = "1.0.56"
+version = "1.0.58"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2b63bdb0cd06f1f4dedf69b254734f9b45af66e4a031e42a7480257d9898b435"
+checksum = "fa1fb82fc0c281dd9671101b66b771ebbe1eaf967b96ac8740dcba4b70005ca8"
 dependencies = [
  "unicode-ident",
 ]
 
 [[package]]
 name = "quote"
-version = "1.0.26"
+version = "1.0.27"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "4424af4bf778aae2051a77b60283332f386554255d722233d09fbfc7e30da2fc"
+checksum = "8f4f29d145265ec1c483c7c654450edde0bfe043d3938d6972630663356d9500"
 dependencies = [
  "proc-macro2",
 ]
@@ -555,9 +567,9 @@ dependencies = [
 
 [[package]]
 name = "rustix"
-version = "0.37.18"
+version = "0.37.19"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "8bbfc1d1c7c40c01715f47d71444744a81669ca84e8b63e25a55e169b1f86433"
+checksum = "acf8729d8542766f1b2cf77eb034d52f40d375bb8b615d0b147089946e16613d"
 dependencies = [
  "bitflags",
  "errno",
@@ -608,22 +620,22 @@ dependencies = [
 
 [[package]]
 name = "serde"
-version = "1.0.160"
+version = "1.0.163"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "bb2f3770c8bce3bcda7e149193a069a0f4365bda1fa5cd88e03bca26afc1216c"
+checksum = "2113ab51b87a539ae008b5c6c02dc020ffa39afd2d83cffcb3f4eb2722cebec2"
 dependencies = [
  "serde_derive",
 ]
 
 [[package]]
 name = "serde_derive"
-version = "1.0.160"
+version = "1.0.163"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "291a097c63d8497e00160b166a967a4a79c64f3facdd01cbd7502231688d77df"
+checksum = "8c805777e3930c8883389c602315a24224bcc738b63905ef87cd1420353ea93e"
 dependencies = [
  "proc-macro2",
  "quote",
- "syn 2.0.15",
+ "syn 2.0.16",
 ]
 
 [[package]]
@@ -673,9 +685,9 @@ dependencies = [
 
 [[package]]
 name = "syn"
-version = "2.0.15"
+version = "2.0.16"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a34fcf3e8b60f57e6a14301a2e916d323af98b0ea63c599441eec8558660c822"
+checksum = "a6f671d4b5ffdb8eadec19c0ae67fe2639df8684bd7bc4b83d986b8db549cf01"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -718,7 +730,7 @@ checksum = "f9456a42c5b0d803c8cd86e73dd7cc9edd429499f37a3550d286d5e86720569f"
 dependencies = [
  "proc-macro2",
  "quote",
- "syn 2.0.15",
+ "syn 2.0.16",
 ]
 
 [[package]]

@@ -9,6 +9,7 @@ pub struct VMCollection {}
 
 impl Collection<DummyVM> for VMCollection {
     fn stop_all_mutators<F>(_tls: VMWorkerThread, _mutator_visitor: F)
+    // fn stop_all_mutators<F>(_tls: VMWorkerThread, _mutator_visitor: F, _current_gc_should_unload_classes: bool)
     where
         F: FnMut(&'static mut Mutator<DummyVM>),
     {
