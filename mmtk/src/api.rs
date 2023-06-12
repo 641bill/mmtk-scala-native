@@ -10,9 +10,11 @@ use mmtk::util::{ObjectReference, Address};
 use mmtk::util::opaque_pointer::*;
 use mmtk::scheduler::{GCController, GCWorker};
 use mmtk::Mutator;
-use crate::DummyVM;
+use crate::ScalaNative;
 use crate::SINGLETON;
 use crate::BUILDER;
+use crate::ScalaNative_Upcalls;
+use crate::UPCALLS;
 
 #[no_mangle]
 pub extern "C" fn mmtk_init(heap_size: usize) {
@@ -30,12 +32,12 @@ pub extern "C" fn mmtk_init(heap_size: usize) {
 }
 
 #[no_mangle]
-pub extern "C" fn mmtk_bind_mutator(tls: VMMutatorThread) -> *mut Mutator<DummyVM> {
+pub extern "C" fn mmtk_bind_mutator(tls: VMMutatorThread) -> *mut Mutator<ScalaNative> {
     Box::into_raw(memory_manager::bind_mutator(&SINGLETON, tls))
 }
 
 #[no_mangle]
-pub extern "C" fn mmtk_destroy_mutator(mutator: *mut Mutator<DummyVM>) {
+pub extern "C" fn mmtk_destroy_mutator(mutator: *mut Mutator<ScalaNative>) {
     // notify mmtk-core about destroyed mutator
     memory_manager::destroy_mutator(unsafe { &mut *mutator });
     // turn the ptr back to a box, and let Rust properly reclaim it
@@ -43,21 +45,26 @@ pub extern "C" fn mmtk_destroy_mutator(mutator: *mut Mutator<DummyVM>) {
 }
 
 #[no_mangle]
-pub extern "C" fn mmtk_alloc(mutator: *mut Mutator<DummyVM>, size: usize,
-                    align: usize, offset: isize, mut semantics: AllocationSemantics) -> Address {
-    if size >= SINGLETON.get_plan().constraints().max_non_los_default_alloc_bytes {
-        semantics = AllocationSemantics::Los;
-    }
-    memory_manager::alloc::<DummyVM>(unsafe { &mut *mutator }, size, align, offset, semantics)
+pub extern "C" fn mmtk_flush_mutator(mutator: *mut Mutator<ScalaNative>) {
+    memory_manager::flush_mutator(unsafe { &mut *mutator });
 }
 
 #[no_mangle]
-pub extern "C" fn mmtk_post_alloc(mutator: *mut Mutator<DummyVM>, refer: ObjectReference,
+pub extern "C" fn mmtk_alloc(mutator: *mut Mutator<ScalaNative>, size: usize,
+                    align: usize, offset: usize, mut semantics: AllocationSemantics) -> Address {
+    if size >= SINGLETON.get_plan().constraints().max_non_los_default_alloc_bytes {
+        semantics = AllocationSemantics::Los;
+    }
+    memory_manager::alloc::<ScalaNative>(unsafe { &mut *mutator }, size, align, offset, semantics)
+}
+
+#[no_mangle]
+pub extern "C" fn mmtk_post_alloc(mutator: *mut Mutator<ScalaNative>, refer: ObjectReference,
                                         bytes: usize, mut semantics: AllocationSemantics) {
     if bytes >= SINGLETON.get_plan().constraints().max_non_los_default_alloc_bytes {
         semantics = AllocationSemantics::Los;
     }
-    memory_manager::post_alloc::<DummyVM>(unsafe { &mut *mutator }, refer, bytes, semantics)
+    memory_manager::post_alloc::<ScalaNative>(unsafe { &mut *mutator }, refer, bytes, semantics)
 }
 
 #[no_mangle]
@@ -66,13 +73,13 @@ pub extern "C" fn mmtk_will_never_move(object: ObjectReference) -> bool {
 }
 
 #[no_mangle]
-pub extern "C" fn mmtk_start_control_collector(tls: VMWorkerThread, controller: &'static mut GCController<DummyVM>) {
+pub extern "C" fn mmtk_start_control_collector(tls: VMWorkerThread, controller: &'static mut GCController<ScalaNative>) {
     memory_manager::start_control_collector(&SINGLETON, tls, controller);
 }
 
 #[no_mangle]
-pub extern "C" fn mmtk_start_worker(tls: VMWorkerThread, worker: &'static mut GCWorker<DummyVM>) {
-    memory_manager::start_worker::<DummyVM>(&SINGLETON, tls, worker)
+pub extern "C" fn mmtk_start_worker(tls: VMWorkerThread, worker: &'static mut GCWorker<ScalaNative>) {
+    memory_manager::start_worker::<ScalaNative>(&SINGLETON, tls, worker)
 }
 
 #[no_mangle]
@@ -118,7 +125,7 @@ pub extern "C" fn mmtk_is_mmtk_object(addr: Address) -> bool {
 
 #[no_mangle]
 pub extern "C" fn mmtk_is_in_mmtk_spaces(object: ObjectReference) -> bool {
-    memory_manager::is_in_mmtk_spaces::<DummyVM>(object)
+    memory_manager::is_in_mmtk_spaces::<ScalaNative>(object)
 }
 
 #[no_mangle]
@@ -133,8 +140,8 @@ pub extern "C" fn mmtk_modify_check(object: ObjectReference) {
 
 #[no_mangle]
 pub extern "C" fn mmtk_handle_user_collection_request(tls: VMMutatorThread) {
-    memory_manager::handle_user_collection_request::<DummyVM>(&SINGLETON, tls);
-    // memory_manager::handle_user_collection_request::<DummyVM>(&SINGLETON, tls, false);
+    memory_manager::handle_user_collection_request::<ScalaNative>(&SINGLETON, tls);
+    // memory_manager::handle_user_collection_request::<ScalaNative>(&SINGLETON, tls, false);
 }
 
 #[no_mangle]
@@ -183,7 +190,7 @@ pub extern "C" fn mmtk_last_heap_address() -> Address {
 #[no_mangle]
 #[cfg(feature = "malloc_counted_size")]
 pub extern "C" fn mmtk_counted_malloc(size: usize) -> Address {
-    memory_manager::counted_malloc::<DummyVM>(&SINGLETON, size)
+    memory_manager::counted_malloc::<ScalaNative>(&SINGLETON, size)
 }
 #[no_mangle]
 pub extern "C" fn mmtk_malloc(size: usize) -> Address {
@@ -193,7 +200,7 @@ pub extern "C" fn mmtk_malloc(size: usize) -> Address {
 #[no_mangle]
 #[cfg(feature = "malloc_counted_size")]
 pub extern "C" fn mmtk_counted_calloc(num: usize, size: usize) -> Address {
-    memory_manager::counted_calloc::<DummyVM>(&SINGLETON, num, size)
+    memory_manager::counted_calloc::<ScalaNative>(&SINGLETON, num, size)
 }
 #[no_mangle]
 pub extern "C" fn mmtk_calloc(num: usize, size: usize) -> Address {
@@ -203,7 +210,7 @@ pub extern "C" fn mmtk_calloc(num: usize, size: usize) -> Address {
 #[no_mangle]
 #[cfg(feature = "malloc_counted_size")]
 pub extern "C" fn mmtk_realloc_with_old_size(addr: Address, size: usize, old_size: usize) -> Address {
-    memory_manager::realloc_with_old_size::<DummyVM>(&SINGLETON, addr, size, old_size)
+    memory_manager::realloc_with_old_size::<ScalaNative>(&SINGLETON, addr, size, old_size)
 }
 #[no_mangle]
 pub extern "C" fn mmtk_realloc(addr: Address, size: usize) -> Address {
@@ -213,9 +220,22 @@ pub extern "C" fn mmtk_realloc(addr: Address, size: usize) -> Address {
 #[no_mangle]
 #[cfg(feature = "malloc_counted_size")]
 pub extern "C" fn mmtk_free_with_size(addr: Address, old_size: usize) {
-    memory_manager::free_with_size::<DummyVM>(&SINGLETON, addr, old_size)
+    memory_manager::free_with_size::<ScalaNative>(&SINGLETON, addr, old_size)
 }
 #[no_mangle]
 pub extern "C" fn mmtk_free(addr: Address) {
     memory_manager::free(addr)
+}
+
+#[no_mangle]
+pub extern "C" fn get_max_non_los_default_alloc_bytes() -> usize {
+    SINGLETON
+        .get_plan()
+        .constraints()
+        .max_non_los_default_alloc_bytes
+}
+
+#[no_mangle]
+pub extern "C" fn scalanative_gc_init(calls: *const ScalaNative_Upcalls) {
+    unsafe { UPCALLS = calls };
 }

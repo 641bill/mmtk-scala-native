@@ -1,11 +1,11 @@
 use mmtk::vm::ReferenceGlue;
 use mmtk::util::ObjectReference;
 use mmtk::util::opaque_pointer::VMWorkerThread;
-use crate::DummyVM;
+use crate::ScalaNative;
 
 pub struct VMReferenceGlue {}
 
-impl ReferenceGlue<DummyVM> for VMReferenceGlue {
+impl ReferenceGlue<ScalaNative> for VMReferenceGlue {
     type FinalizableType = ObjectReference;
 
     fn set_referent(_reference: ObjectReference, _referent: ObjectReference) {

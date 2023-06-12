@@ -1,7 +1,7 @@
 // GITHUB-CI: MMTK_PLAN=all
 
 use crate::api;
-use crate::DummyVM;
+use crate::ScalaNative;
 use crate::tests::fixtures::{SerialFixture, MutatorFixture};
 use mmtk::plan::AllocationSemantics;
 use mmtk::vm::VMBinding;
@@ -14,8 +14,8 @@ lazy_static! {
 #[test]
 pub fn allocate_alignment() {
     MUTATOR.with_fixture(|fixture| {
-        let min = DummyVM::MIN_ALIGNMENT;
-        let max = DummyVM::MAX_ALIGNMENT;
+        let min = ScalaNative::MIN_ALIGNMENT;
+        let max = ScalaNative::MAX_ALIGNMENT;
         info!("Allowed alignment between {} and {}", min, max);
         let mut align = min;
         while align <= max {
@@ -30,9 +30,9 @@ pub fn allocate_alignment() {
 #[test]
 pub fn allocate_offset() {
     MUTATOR.with_fixture(|fixture| {
-        const OFFSET: isize = 4;
-        let min = DummyVM::MIN_ALIGNMENT;
-        let max = DummyVM::MAX_ALIGNMENT;
+        const OFFSET: usize = 4;
+        let min = ScalaNative::MIN_ALIGNMENT;
+        let max = ScalaNative::MAX_ALIGNMENT;
         info!("Allowed alignment between {} and {}", min, max);
         let mut align = min;
         while align <= max {

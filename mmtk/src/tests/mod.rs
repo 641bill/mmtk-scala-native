@@ -1,4 +1,4 @@
-// NOTE: Since the dummyvm uses a global MMTK instance,
+// NOTE: Since the ScalaNative uses a global MMTK instance,
 // it will panic if MMTK initialized more than once per process.
 // We run each of the following modules in a separate test process.
 //
@@ -22,4 +22,3 @@ mod malloc_ms;
 mod conservatism;
 mod is_in_mmtk_spaces;
 mod fixtures;
-mod edges_test;

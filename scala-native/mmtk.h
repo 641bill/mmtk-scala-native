@@ -1,9 +1,11 @@
-#ifndef EXPERIMENTAL_MMTK_H
-#define EXPERIMENTAL_MMTK_H
+#ifndef MMTK_H
+#define MMTK_H
 
 #include <stdbool.h>
 #include <stddef.h>
 #include <sys/types.h>
+#include <stdint.h>
+#include <stdio.h>
 
 #ifdef __cplusplus
 extern "C" {
@@ -11,11 +13,31 @@ extern "C" {
 
 typedef void* MMTk_Mutator;
 
+// This has the same layout as mmtk::util::alloc::AllocationError
+typedef enum {
+    HeapOutOfMemory,
+    MmapOutOfMemory,
+} MMTkAllocationError;
+
+extern const uintptr_t GLOBAL_SIDE_METADATA_BASE_ADDRESS;
+extern const uintptr_t GLOBAL_SIDE_METADATA_VM_BASE_ADDRESS;
+extern const uintptr_t VO_BIT_ADDRESS;
+extern const size_t MMTK_MARK_COMPACT_HEADER_RESERVED_IN_BYTES;
+extern const uintptr_t FREE_LIST_ALLOCATOR_SIZE;
+
+extern const char* get_mmtk_version();
+
 // Initialize an MMTk instance
 extern void mmtk_init(size_t heap_size);
 
 // Request MMTk to create a new mutator for the given `tls` thread
 extern MMTk_Mutator mmtk_bind_mutator(void* tls);
+
+// Reclaim mutator that is no longer needed
+extern void mmtk_destroy_mutator(MMTk_Mutator mutator);
+
+// Flush mutator local state
+extern void mmtk_flush_mutator(MMTk_Mutator mutator);
 
 // Allocate memory for an object
 extern void* mmtk_alloc(MMTk_Mutator mutator,
@@ -24,10 +46,102 @@ extern void* mmtk_alloc(MMTk_Mutator mutator,
                         ssize_t offset,
                         int allocator);
 
-// Add any additional function declarations specific to ExperimentalGC below this line
+// Perform post-allocation hooks or actions such as initializing object metadata
+extern void mmtk_post_alloc(MMTk_Mutator mutator,
+                            void* refer,
+                            int bytes,
+                            int allocator);
+
+extern void mmtk_initialize_collection(void* tls);
+
+// This type declaration needs to match AllocatorSelector in mmtk-core
+typedef struct {
+    uint8_t tag;
+    uint8_t index;
+} AllocatorSelector;
+
+#define TAG_BUMP_POINTER              0
+#define TAG_LARGE_OBJECT              1
+#define TAG_MALLOC                    2
+#define TAG_IMMIX                     3
+#define TAG_MARK_COMPACT              4
+#define TAG_FREE_LIST                 5
+
+extern AllocatorSelector get_allocator_mapping(int allocator);
+extern size_t get_max_non_los_default_alloc_bytes();
+
+/**
+ * Finalization
+ */
+extern void mmtk_add_finalizer(void* obj);
+extern void* mmtk_get_finalized_object();
+extern void mmtk_gc_init(size_t heap_size);
+// Return if object pointed to by `object` will never move
+extern bool mmtk_will_never_move(void* object);
+// Process an MMTk option. Return true if option was processed successfully
+extern bool mmtk_process(char* name, char* value);
+// Process MMTk options. Return true if all options were processed successfully
+extern bool mmtk_process_bulk(char* options);
+// Sanity only. Scan heap for discrepancies and errors
+extern void mmtk_scan_region();
+// Trigger a garbage collection as requested by the user.
+extern void mmtk_handle_user_collection_request(void *tls);
+
+extern void start_control_collector(void *tls, void *context);
+extern void start_worker(void *tls, void* worker);
+
+/**
+ * VM Accounting
+ */
+extern size_t free_bytes();
+extern size_t total_bytes();
+
+typedef struct {
+    void** buf;
+    size_t cap;
+} NewBuffer;
+
+typedef struct {
+    void (*func)(MMTk_Mutator mutator, void* data);
+    void* data;
+} MutatorClosure;
+
+typedef struct {
+    NewBuffer (*func)(void** buf, size_t size, size_t capa, void* data);
+    void* data;
+} EdgesClosure;
+
+typedef struct {
+    void (*stop_all_mutators) (void *tls, bool scan_mutators_in_safepoint, MutatorClosure closure);
+    void (*resume_mutators) (void *tls);
+    void (*block_for_gc) (void *tls);
+    void (*spawn_gc_thread) (void *tls, int kind, void *ctx);
+    void (*out_of_memory) (void* tls, MMTkAllocationError err_kind);
+    void (*schedule_finalizer) ();
+
+    int (*get_object_array_id) ();
+    int (*get_weak_ref_id) ();
+    int (*get_weak_ref_field_offset) ();
+    int (*get_array_ids_min) ();
+    int (*get_array_ids_max) ();
+    size_t (*get_allocation_alignment) ();
+
+    void (*scan_roots_in_all_mutator_threads) (EdgesClosure closure);
+    void (*scan_roots_in_mutator_thread) (EdgesClosure closure, void* tls);
+    void (*scan_vm_specific_roots) (EdgesClosure closure);
+    void (*prepare_for_roots_re_scanning) ();
+
+    void (*get_mutators) (MutatorClosure closure);
+    bool (*is_mutator) (void* tls);
+    size_t (*number_of_mutators) ();
+    void* (*get_mmtk_mutator) (void* tls);
+
+} ScalaNative_Upcalls;
+
+extern void scalanative_gc_init(ScalaNative_Upcalls *calls);
 
 #ifdef __cplusplus
 }
 #endif
 
-#endif  // EXPERIMENTAL_MMTK_H
+#endif  // MMTK_H

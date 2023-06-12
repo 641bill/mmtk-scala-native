@@ -1,12 +1,12 @@
 use mmtk::util::malloc::malloc_ms_util;
-use crate::DummyVM;
+use crate::ScalaNative;
 
 #[test]
 fn test_malloc() {
-    let (address1, bool1) = malloc_ms_util::alloc::<DummyVM>(16, 8, 0);
-    let (address2, bool2) = malloc_ms_util::alloc::<DummyVM>(16, 32, 0);
-    let (address3, bool3) = malloc_ms_util::alloc::<DummyVM>(16, 8, 4);
-    let (address4, bool4) = malloc_ms_util::alloc::<DummyVM>(32, 64, 4);
+    let (address1, bool1) = malloc_ms_util::alloc::<ScalaNative>(16, 8, 0);
+    let (address2, bool2) = malloc_ms_util::alloc::<ScalaNative>(16, 32, 0);
+    let (address3, bool3) = malloc_ms_util::alloc::<ScalaNative>(16, 8, 4);
+    let (address4, bool4) = malloc_ms_util::alloc::<ScalaNative>(32, 64, 4);
 
     assert!(address1.is_aligned_to(8));
     assert!(address2.is_aligned_to(32));

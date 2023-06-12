@@ -1,7 +1,8 @@
 use mmtk::util::copy::{CopySemantics, GCWorkerCopyContext};
 use mmtk::util::{Address, ObjectReference};
 use mmtk::vm::*;
-use crate::DummyVM;
+use crate::ScalaNative;
+use crate::abi::*;
 
 pub struct VMObjectModel {}
 
@@ -9,7 +10,7 @@ pub struct VMObjectModel {}
 // Change this if you want to test other values.
 pub const OBJECT_REF_OFFSET: usize = 4;
 
-impl ObjectModel<DummyVM> for VMObjectModel {
+impl ObjectModel<ScalaNative> for VMObjectModel {
     const GLOBAL_LOG_BIT_SPEC: VMGlobalLogBitSpec = VMGlobalLogBitSpec::in_header(0);
     // const GLOBAL_FIELD_UNLOG_BIT_SPEC: VMGlobalFieldUnlogBitSpec = VMGlobalFieldUnlogBitSpec::in_header(0);
     const LOCAL_FORWARDING_POINTER_SPEC: VMLocalForwardingPointerSpec = VMLocalForwardingPointerSpec::in_header(0);
@@ -22,7 +23,7 @@ impl ObjectModel<DummyVM> for VMObjectModel {
     fn copy(
         _from: ObjectReference,
         _semantics: CopySemantics,
-        _copy_context: &mut GCWorkerCopyContext<DummyVM>,
+        _copy_context: &mut GCWorkerCopyContext<ScalaNative>,
     ) -> ObjectReference {
         unimplemented!()
     }
@@ -32,7 +33,7 @@ impl ObjectModel<DummyVM> for VMObjectModel {
     }
 
     fn get_current_size(_object: ObjectReference) -> usize {
-        unimplemented!()
+        Obj::from(_object).size()
     }
 
     fn get_size_when_copied(object: ObjectReference) -> usize {
@@ -43,7 +44,7 @@ impl ObjectModel<DummyVM> for VMObjectModel {
         ::std::mem::size_of::<usize>()
     }
 
-    fn get_align_offset_when_copied(_object: ObjectReference) -> isize {
+    fn get_align_offset_when_copied(_object: ObjectReference) -> usize {
         0
     }
 

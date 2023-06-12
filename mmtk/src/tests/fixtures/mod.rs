@@ -11,7 +11,7 @@ use mmtk::util::{ObjectReference, VMThread, VMMutatorThread};
 
 use crate::api::*;
 use crate::object_model::OBJECT_REF_OFFSET;
-use crate::DummyVM;
+use crate::ScalaNative;
 
 pub trait FixtureContent {
     fn create() -> Self;
@@ -94,7 +94,7 @@ impl FixtureContent for SingleObject {
 }
 
 pub struct MMTKSingleton {
-    pub mmtk: &'static MMTK<DummyVM>
+    pub mmtk: &'static MMTK<ScalaNative>
 }
 
 impl FixtureContent for MMTKSingleton {
@@ -144,8 +144,8 @@ impl FixtureContent for TwoObjects {
 use mmtk::plan::Mutator;
 
 pub struct MutatorFixture {
-    pub mmtk: &'static MMTK<DummyVM>,
-    pub mutator: *mut Mutator<DummyVM>,
+    pub mmtk: &'static MMTK<ScalaNative>,
+    pub mutator: *mut Mutator<ScalaNative>,
 }
 
 impl FixtureContent for MutatorFixture {
