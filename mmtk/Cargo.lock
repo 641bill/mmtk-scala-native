@@ -460,6 +460,7 @@ dependencies = [
  "libc",
  "log",
  "mmtk",
+ "once_cell",
 ]
 
 [[package]]

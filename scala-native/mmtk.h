@@ -87,8 +87,14 @@ extern void mmtk_scan_region();
 // Trigger a garbage collection as requested by the user.
 extern void mmtk_handle_user_collection_request(void *tls);
 
-extern void start_control_collector(void *tls, void *context);
-extern void start_worker(void *tls, void* worker);
+extern void mmtk_start_control_collector(void *tls, void *context);
+extern void mmtk_start_worker(void *tls, void* worker);
+
+extern bool mmtk_is_mmtk_object(void* addr);
+
+extern void release_buffer(void** buf, size_t size, size_t capa);
+extern void* mmtk_starting_heap_address();
+extern void* mmtk_last_heap_address();
 
 /**
  * VM Accounting
@@ -112,10 +118,24 @@ typedef struct {
 } EdgesClosure;
 
 typedef struct {
+    NewBuffer (*func)(void** buf, size_t size, size_t capa, void* data);
+    void* data;
+} NodesClosure;
+
+void invoke_MutatorClosure(MutatorClosure* closure, MMTk_Mutator mutator);
+NewBuffer invoke_EdgesClosure(EdgesClosure* closure, void** buf, size_t size, size_t capa);
+NewBuffer invoke_NodesClosure(NodesClosure* closure, void** buf, size_t size, size_t capa);
+
+typedef struct {
+    int kind;
+    void *gc_context;
+} MMTk_GCThreadTLS;
+typedef MMTk_GCThreadTLS* MMTk_VMWorkerThread;
+
+typedef struct {
     void (*stop_all_mutators) (void *tls, bool scan_mutators_in_safepoint, MutatorClosure closure);
     void (*resume_mutators) (void *tls);
     void (*block_for_gc) (void *tls);
-    void (*spawn_gc_thread) (void *tls, int kind, void *ctx);
     void (*out_of_memory) (void* tls, MMTkAllocationError err_kind);
     void (*schedule_finalizer) ();
 
@@ -126,9 +146,9 @@ typedef struct {
     int (*get_array_ids_max) ();
     size_t (*get_allocation_alignment) ();
 
-    void (*scan_roots_in_all_mutator_threads) (EdgesClosure closure);
-    void (*scan_roots_in_mutator_thread) (EdgesClosure closure, void* tls);
-    void (*scan_vm_specific_roots) (EdgesClosure closure);
+    void (*scan_roots_in_all_mutator_threads) (NodesClosure closure);
+    void (*scan_roots_in_mutator_thread) (NodesClosure closure, void* tls);
+    void (*scan_vm_specific_roots) (NodesClosure closure);
     void (*prepare_for_roots_re_scanning) ();
 
     void (*get_mutators) (MutatorClosure closure);
@@ -136,6 +156,8 @@ typedef struct {
     size_t (*number_of_mutators) ();
     void* (*get_mmtk_mutator) (void* tls);
 
+    void (*init_gc_worker_thread)( MMTk_GCThreadTLS *gc_worker_tls);
+    MMTk_GCThreadTLS* (*get_gc_thread_tls)(void);
 } ScalaNative_Upcalls;
 
 extern void scalanative_gc_init(ScalaNative_Upcalls *calls);

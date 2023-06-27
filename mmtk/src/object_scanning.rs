@@ -1,6 +1,6 @@
-use std::mem;
+use std::{mem, fmt::Display};
 
-use mmtk::{vm::{EdgeVisitor}, util::{constants::LOG_BYTES_IN_ADDRESS, ObjectReference, VMWorkerThread}};
+use mmtk::{vm::{EdgeVisitor}, util::{constants::LOG_BYTES_IN_ADDRESS, ObjectReference, VMWorkerThread}, memory_manager};
 
 use crate::{abi::*, edges::ScalaNativeEdge};
 
@@ -8,16 +8,24 @@ trait ObjIterate: Sized {
 	fn obj_iterate(&self, closure: &mut impl EdgeVisitor<ScalaNativeEdge>);
 }
 
+impl Display for Object {
+	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+		write!(f, "Object(0x{:x}), with fields: ", self.get_field_address())
+	}
+}
+
 impl ObjIterate for Object {
 	fn obj_iterate(&self, closure: &mut impl EdgeVisitor<ScalaNativeEdge>) {
 			// Go through the fields
 			let start: mmtk::util::Address = self.get_field_address();
-			let fields_size = (unsafe { &*self.rtti }).size as usize - mem::size_of::<Rtti>();
-			#[cfg(uses_lockword)]
-			let fields_size = size_excluding_rtti - mem::size_of::<word_t>();
-			let num_fields = fields_size / mem::size_of::<Field_t>();
+			let num_fields = self.num_fields();
 			for i in 0..num_fields {
 				let edge = start + (i << LOG_BYTES_IN_ADDRESS);
+				assert!(
+					crate::mmtk::memory_manager::is_mmtk_object(edge),
+					"{} is not a valid edge but is visited in the object: {}.",
+					edge, self
+				);
 				closure.visit_edge(edge);
 			}
 	}
@@ -29,6 +37,11 @@ impl ObjIterate for ArrayHeader {
 			let start: mmtk::util::Address = self.get_element_address(0);
 			for i in 0..self.length {
 				let edge = start + (i as usize * self.stride as usize);
+				assert!(
+					crate::mmtk::memory_manager::is_mmtk_object(edge),
+					"{} is not a valid edge but is visited in an array.",
+					edge
+				);
 				closure.visit_edge(edge);
 			}
 	}

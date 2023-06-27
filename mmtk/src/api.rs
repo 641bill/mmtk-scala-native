@@ -124,6 +124,11 @@ pub extern "C" fn mmtk_is_mmtk_object(addr: Address) -> bool {
 }
 
 #[no_mangle]
+pub extern "C" fn mmtk_is_aligned_to(addr: Address, align: usize) -> bool {
+    addr.is_aligned_to(align)
+}
+
+#[no_mangle]
 pub extern "C" fn mmtk_is_in_mmtk_spaces(object: ObjectReference) -> bool {
     memory_manager::is_in_mmtk_spaces::<ScalaNative>(object)
 }
@@ -238,4 +243,12 @@ pub extern "C" fn get_max_non_los_default_alloc_bytes() -> usize {
 #[no_mangle]
 pub extern "C" fn scalanative_gc_init(calls: *const ScalaNative_Upcalls) {
     unsafe { UPCALLS = calls };
+}
+
+/// # Safety
+/// Caller needs to make sure the ptr is a valid vector pointer.
+#[no_mangle]
+pub unsafe extern "C" fn release_buffer(ptr: *mut Address, length: usize, capacity: usize) {
+    // Take ownership and then drop it
+    let _vec = Vec::<Address>::from_raw_parts(ptr, length, capacity);
 }

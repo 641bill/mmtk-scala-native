@@ -3,6 +3,7 @@ extern crate mmtk;
 #[macro_use]
 extern crate lazy_static;
 
+use abi::GCThreadTLS;
 use libc::size_t;
 use libc::uintptr_t;
 use mmtk::Mutator;
@@ -12,7 +13,9 @@ use mmtk::vm::VMBinding;
 use mmtk::MMTKBuilder;
 use mmtk::MMTK;
 use mmtk::util::opaque_pointer::*;
+use once_cell::sync::OnceCell;
 use std::ptr::null_mut;
+use std::collections::HashSet;
 
 pub mod active_plan;
 pub mod api;
@@ -40,11 +43,13 @@ impl VMBinding for ScalaNative {
     type VMMemorySlice = edges::ScalaNativeMemorySlice;
 
     /// Allowed maximum alignment in bytes.
+    const MIN_ALIGNMENT: usize = 16;
     const MAX_ALIGNMENT: usize = 1 << 6;
 }
 
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Mutex;
+use std::thread::ThreadId;
 
 /// This is used to ensure we initialize MMTk at a specified timing.
 pub static MMTK_INITIALIZED: AtomicBool = AtomicBool::new(false);
@@ -128,6 +133,17 @@ pub struct EdgesClosure {
 }
 
 #[repr(C)]
+pub struct NodesClosure {
+    pub func: extern "C" fn(
+        buf: *mut Address,
+        size: usize,
+        cap: usize,
+        data: *mut libc::c_void,
+    ) -> NewBuffer,
+    pub data: *const libc::c_void,
+}
+
+#[repr(C)]
 pub struct ScalaNative_Upcalls {
     // collection 
     pub stop_all_mutators: extern "C" fn(
@@ -139,11 +155,6 @@ pub struct ScalaNative_Upcalls {
         tls: VMWorkerThread,
     ),
     pub block_for_gc: extern "C" fn(),
-    pub spawn_gc_thread: extern "C" fn(
-        tls: VMThread,
-        kind: libc::c_int,
-        ctx: *mut libc::c_void,
-    ),
     pub out_of_memory: extern "C" fn(
         tls: VMThread,
         err_kind: AllocationError,
@@ -160,10 +171,10 @@ pub struct ScalaNative_Upcalls {
 
     // scanning
     /// Scan all the mutators for roots.
-    pub scan_roots_in_all_mutator_threads: extern "C" fn(closure: EdgesClosure),
+    pub scan_roots_in_all_mutator_threads: extern "C" fn(closure: NodesClosure),
     /// Scan one mutator for roots.
-    pub scan_roots_in_mutator_thread: extern "C" fn(closure: EdgesClosure, tls: VMMutatorThread),
-    pub scan_vm_specific_roots: extern "C" fn(closure: EdgesClosure),
+    pub scan_roots_in_mutator_thread: extern "C" fn(closure: NodesClosure, tls: VMMutatorThread),
+    pub scan_vm_specific_roots: extern "C" fn(closure: NodesClosure),
     pub prepare_for_roots_re_scanning: extern "C" fn(),
 
     // active_plan
@@ -171,6 +182,25 @@ pub struct ScalaNative_Upcalls {
     pub is_mutator: extern "C" fn(tls: VMThread) -> bool,
     pub number_of_mutators: extern "C" fn() -> size_t,
     pub get_mmtk_mutator: extern "C" fn(tls: VMMutatorThread) -> *mut Mutator<ScalaNative>,
+    pub init_gc_worker_thread: extern "C" fn(tls: *mut GCThreadTLS),
+    pub get_gc_thread_tls: extern "C" fn() -> *mut GCThreadTLS,
 }
 
 pub static mut UPCALLS: *const ScalaNative_Upcalls = null_mut();
+
+pub static GC_THREADS: OnceCell<Mutex<HashSet<ThreadId>>> = OnceCell::new();
+
+pub(crate) fn register_gc_thread(thread_id: ThreadId) {
+    let mut gc_threads = GC_THREADS.get_or_init(|| Mutex::new(HashSet::new())).lock().unwrap();
+    gc_threads.insert(thread_id);
+}
+
+pub(crate) fn unregister_gc_thread(thread_id: ThreadId) {
+    let mut gc_threads = GC_THREADS.get().unwrap().lock().unwrap();
+    gc_threads.remove(&thread_id);
+}
+
+pub(crate) fn is_gc_thread(thread_id: ThreadId) -> bool {
+    let gc_threads = GC_THREADS.get().unwrap().lock().unwrap();
+    gc_threads.contains(&thread_id)
+}

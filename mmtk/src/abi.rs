@@ -1,11 +1,10 @@
 use std::mem;
 
 use libc::size_t;
-use mmtk::util::{ObjectReference, Address};
-use crate::UPCALLS;
-
-#[cfg(scalanative_multithreading_enabled)]
-pub const uses_lockword: bool = true;
+use mmtk::util::{ObjectReference, Address, VMWorkerThread};
+use crate::{UPCALLS, ScalaNative};
+use mmtk::scheduler::{GCController, GCWorker};
+use crate::collection::{GC_THREAD_KIND_CONTROLLER, GC_THREAD_KIND_WORKER};
 
 #[cfg(scalanative_multithreading_enabled)]
 pub const monitor_inflation_mark_mask: word_t = 1;
@@ -94,19 +93,29 @@ impl Object {
 	}
 
 	pub fn get_field_address(&self) -> Address {
-    let base_size = mem::size_of::<Rtti>() as isize;
+    let base_size = mem::size_of::<*mut Rtti>() as usize;
     #[cfg(uses_lockword)]
-    let base_size = base_size + mem::size_of::<word_t>() as isize;
+    let base_size = base_size + mem::size_of::<word_t>() as usize;
     Address::from_ref(self) + base_size
 	}
+
+	pub fn num_fields(&self) -> usize {
+		let fields_size = (unsafe { &*self.rtti }).size as usize - mem::size_of::<*mut Rtti>();
+		#[cfg(uses_lockword)]
+		println!("fields_size: {}", fields_size);
+		#[cfg(uses_lockword)]
+		let fields_size = fields_size - mem::size_of::<*mut word_t>();
+		fields_size / mem::size_of::<Field_t>()
+	}
+
 }
 
 impl ArrayHeader {
 	pub fn get_element_address(&self, index: i32) -> Address {
-		let base_size = mem::size_of::<ArrayHeader>() as isize;
+		let base_size = mem::size_of::<ArrayHeader>() as usize;
 		#[cfg(uses_lockword)]
-		let base_size = base_size + mem::size_of::<word_t>() as isize;
-		Address::from_ref(self) + base_size + (index as isize) * (self.stride as isize)
+		let base_size = base_size + mem::size_of::<word_t>() as usize;
+		Address::from_ref(self) + base_size + (index as usize) * (self.stride as usize)
 	}
 }
 
@@ -133,5 +142,79 @@ impl From<ObjectReference> for &Object {
 impl From<&Object> for ObjectReference {
 	fn from(o: &Object) -> Self {
 		unsafe { mem::transmute(o) }
+	}
+}
+
+#[repr(C)]
+pub struct GCThreadTLS {
+    pub kind: libc::c_int,
+    pub gc_context: *mut libc::c_void,
+}
+
+impl GCThreadTLS {
+	fn new(kind: libc::c_int, gc_context: *mut libc::c_void) -> Self {
+			Self {
+					kind,
+					gc_context,
+			}
+	}
+
+	pub fn for_controller(gc_context: *mut GCController<ScalaNative>) -> Self {
+			Self::new(GC_THREAD_KIND_CONTROLLER, gc_context as *mut libc::c_void)
+	}
+
+	pub fn for_worker(gc_context: *mut GCWorker<ScalaNative>) -> Self {
+			Self::new(GC_THREAD_KIND_WORKER, gc_context as *mut libc::c_void)
+	}
+
+	pub fn from_vwt(vwt: VMWorkerThread) -> *mut GCThreadTLS {
+			unsafe { std::mem::transmute(vwt) }
+	}
+
+	/// Cast a pointer to `GCThreadTLS` to a ref, with assertion for null pointer.
+	///
+	/// # Safety
+	///
+	/// Has undefined behavior if `ptr` is invalid.
+	pub unsafe fn check_cast(ptr: *mut GCThreadTLS) -> &'static mut GCThreadTLS {
+			assert!(!ptr.is_null());
+			let result = &mut *ptr;
+			debug_assert!({
+					let kind = result.kind;
+					kind == GC_THREAD_KIND_CONTROLLER || kind == GC_THREAD_KIND_WORKER
+			});
+			result
+	}
+
+	/// Cast a pointer to `VMWorkerThread` to a ref, with assertion for null pointer.
+	///
+	/// # Safety
+	///
+	/// Has undefined behavior if `ptr` is invalid.
+	pub unsafe fn from_vwt_check(vwt: VMWorkerThread) -> &'static mut GCThreadTLS {
+			let ptr = Self::from_vwt(vwt);
+			Self::check_cast(ptr)
+	}
+
+	#[allow(clippy::not_unsafe_ptr_arg_deref)] // `transmute` does not dereference pointer
+	pub fn to_vwt(ptr: *mut Self) -> VMWorkerThread {
+			unsafe { std::mem::transmute(ptr) }
+	}
+
+	/// Get a ref to `GCThreadTLS` from C-level thread-local storage, with assertion for null
+	/// pointer.
+	///
+	/// # Safety
+	///
+	/// Has undefined behavior if the pointer held in C-level TLS is invalid.
+	pub unsafe fn from_upcall_check() -> &'static mut GCThreadTLS {
+			let ptr = ((*UPCALLS).get_gc_thread_tls)();
+			Self::check_cast(ptr)
+	}
+
+	pub fn worker<'w>(&mut self) -> &'w mut GCWorker<ScalaNative> {
+			// NOTE: The returned ref points to the worker which does not have the same lifetime as self.
+			assert!(self.kind == GC_THREAD_KIND_WORKER);
+			unsafe { &mut *(self.gc_context as *mut GCWorker<ScalaNative>) }
 	}
 }
