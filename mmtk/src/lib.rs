@@ -168,7 +168,8 @@ pub struct ScalaNative_Upcalls {
     
     // abi
     pub get_object_array_id: extern "C" fn() -> i32,
-    pub get_weak_ref_id: extern "C" fn() -> i32,
+    pub get_weak_ref_ids_min: extern "C" fn() -> i32,
+    pub get_weak_ref_ids_max: extern "C" fn() -> i32,
     pub get_weak_ref_field_offset: extern "C" fn() -> i32,
     pub get_array_ids_min: extern "C" fn() -> i32,
     pub get_array_ids_max: extern "C" fn() -> i32,

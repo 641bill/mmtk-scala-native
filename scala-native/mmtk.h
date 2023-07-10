@@ -141,7 +141,8 @@ typedef struct {
     void (*schedule_finalizer) ();
 
     int (*get_object_array_id) ();
-    int (*get_weak_ref_id) ();
+    int (*get_weak_ref_ids_min) ();
+    int (*get_weak_ref_ids_max) ();
     int (*get_weak_ref_field_offset) ();
     int (*get_array_ids_min) ();
     int (*get_array_ids_max) ();

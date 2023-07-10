@@ -98,7 +98,8 @@ impl Object {
 	}
 
 	pub fn is_weak_reference(&self) -> bool {
-		unsafe { &*self.rtti }.rt.id == unsafe { ((*UPCALLS).get_weak_ref_id)() } 
+		(unsafe { ((*UPCALLS).get_weak_ref_ids_min)() } <= unsafe { &*self.rtti }.rt.id) &&
+		(unsafe { &*self.rtti }.rt.id <= unsafe { ((*UPCALLS).get_weak_ref_ids_max)() })
 	}
 
 	pub fn is_referant_of_weak_reference(&self, field_offset: i32) -> bool {
