@@ -6,10 +6,10 @@ use crate::{UPCALLS, ScalaNative};
 use mmtk::scheduler::{GCController, GCWorker};
 use crate::collection::{GC_THREAD_KIND_CONTROLLER, GC_THREAD_KIND_WORKER};
 
-#[cfg(scalanative_multithreading_enabled)]
+#[cfg(feature = "scalanative_multithreading_enabled")]
 pub const monitor_inflation_mark_mask: word_t = 1;
 
-#[cfg(scalanative_multithreading_enabled)]
+#[cfg(feature = "scalanative_multithreading_enabled")]
 pub const monitor_object_mask: word_t = !monitor_inflation_mark_mask;
 
 pub type word_t = usize;
@@ -17,7 +17,7 @@ pub type word_t = usize;
 #[repr(C)]
 pub struct Runtime {
 	pub cls: *mut word_t,
-	#[cfg(uses_lockword)]
+	#[cfg(feature = "uses_lockword")]
 	pub lock_word: *mut word_t,
 	pub id: i32,
 	pub tid: i32,
@@ -37,15 +37,32 @@ pub type Field_t = *mut word_t;
 #[repr(C)]
 pub struct Object {
 	pub rtti: *mut Rtti,
-	#[cfg(uses_lockword)]
+	#[cfg(feature = "uses_lockword")]
 	pub lock_word: *mut word_t,
 	pub fields: [Field_t; 0],
 }
 
 #[repr(C)]
+pub struct CharArray {
+	pub header: ArrayHeader,
+	pub value: [i16; 0],
+}
+
+#[repr(C)]
+pub struct StringObject {
+	pub rtti: *mut Rtti,
+	#[cfg(feature = "uses_lockword")]
+	pub lock_word: *mut word_t,
+	pub value: *mut CharArray,
+	pub offset: i32,
+	pub count: i32,
+	pub cached_hash_code: i32,
+}
+
+#[repr(C)]
 pub struct ArrayHeader {
 	pub rtti: *mut Rtti,
-	#[cfg(uses_lockword)]
+	#[cfg(feature = "uses_lockword")]
 	pub lock_word: *mut word_t,
 	pub length: i32,
 	pub stride: i32,
@@ -94,17 +111,17 @@ impl Object {
 
 	pub fn get_field_address(&self) -> Address {
     let base_size = mem::size_of::<*mut Rtti>() as usize;
-    #[cfg(uses_lockword)]
-    let base_size = base_size + mem::size_of::<word_t>() as usize;
+		#[cfg(feature = "uses_lockword")]
+    let base_size = base_size + mem::size_of::<*mut word_t>() as usize;
+		// println!("Object address: {}, with base size: {:x}", Address::from_ref(self), base_size);
     Address::from_ref(self) + base_size
 	}
 
 	pub fn num_fields(&self) -> usize {
 		let fields_size = (unsafe { &*self.rtti }).size as usize - mem::size_of::<*mut Rtti>();
-		#[cfg(uses_lockword)]
-		println!("fields_size: {}", fields_size);
-		#[cfg(uses_lockword)]
+		#[cfg(feature = "uses_lockword")]
 		let fields_size = fields_size - mem::size_of::<*mut word_t>();
+		// println!("Object address: {}, with size: {:x}, and fields_size: {:x}", Address::from_ref(self), (unsafe { &*self.rtti }).size, fields_size);
 		fields_size / mem::size_of::<Field_t>()
 	}
 
@@ -113,20 +130,19 @@ impl Object {
 impl ArrayHeader {
 	pub fn get_element_address(&self, index: i32) -> Address {
 		let base_size = mem::size_of::<ArrayHeader>() as usize;
-		#[cfg(uses_lockword)]
-		let base_size = base_size + mem::size_of::<word_t>() as usize;
+		// println!("Array address: {}, with base size: {:x}", Address::from_ref(self), base_size);
 		Address::from_ref(self) + base_size + (index as usize) * (self.stride as usize)
 	}
 }
 
-#[cfg(uses_lockword)]
-	pub fn field_is_inflated_lock(&self) -> bool {
-		unsafe { *self & monitor_inflation_mark_mask != 0 }
+#[cfg(feature = "uses_lockword")]
+pub fn field_is_inflated_lock(field: Field_t) -> bool {
+	(field as word_t & monitor_inflation_mark_mask) != 0
 }
 
-#[cfg(uses_lockword)]
-	pub fn field_alligned_lock_ref(&self) -> *mut field_t {
-		unsafe { self & monitor_object_mask }
+#[cfg(feature = "uses_lockword")]
+pub fn field_alligned_lock_ref(field: Field_t) -> Field_t {
+	((field as word_t & monitor_inflation_mark_mask) as word_t) as Field_t
 }
 
 pub type Obj = &'static Object;

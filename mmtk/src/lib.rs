@@ -91,11 +91,16 @@ pub struct NewBuffer {
     pub capacity: usize,
 }
 
-/// A closure for reporting mutators.  The C++ code should pass `data` back as the last argument.
+use std::marker::PhantomData;
+
+pub struct SendPtr<T>(*mut T, PhantomData<T>);
+
+unsafe impl<T> Send for SendPtr<T> {}
+
 #[repr(C)]
 pub struct MutatorClosure {
-    pub func: extern "C" fn(mutator: *mut Mutator<ScalaNative>, data: *mut libc::c_void),
-    pub data: *mut libc::c_void,
+    pub func: extern "C" fn(mutator: *mut Mutator<ScalaNative>, data: &SendPtr<libc::c_void>),
+    pub data: SendPtr<libc::c_void>,
 }
 
 impl MutatorClosure {
@@ -105,17 +110,17 @@ impl MutatorClosure {
     {
         Self {
             func: Self::call_rust_closure::<F>,
-            data: callback as *mut F as *mut libc::c_void,
+            data: SendPtr(callback as *mut F as *mut libc::c_void, PhantomData),
         }
     }
 
     extern "C" fn call_rust_closure<F>(
         mutator: *mut Mutator<ScalaNative>,
-        callback_ptr: *mut libc::c_void,
+        callback_ptr: &SendPtr<libc::c_void>,
     ) where
         F: FnMut(&'static mut Mutator<ScalaNative>),
     {
-        let callback: &mut F = unsafe { &mut *(callback_ptr as *mut F) };
+        let callback: &mut F = unsafe { &mut *(callback_ptr.0 as *mut F) };
         callback(unsafe { &mut *mutator });
     }
 }
@@ -184,6 +189,7 @@ pub struct ScalaNative_Upcalls {
     pub get_mmtk_mutator: extern "C" fn(tls: VMMutatorThread) -> *mut Mutator<ScalaNative>,
     pub init_gc_worker_thread: extern "C" fn(tls: *mut GCThreadTLS),
     pub get_gc_thread_tls: extern "C" fn() -> *mut GCThreadTLS,
+    pub init_synchronizer_thread: extern "C" fn(),
 }
 
 pub static mut UPCALLS: *const ScalaNative_Upcalls = null_mut();

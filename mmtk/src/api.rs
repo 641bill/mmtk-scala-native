@@ -2,14 +2,23 @@
 #![allow(clippy::not_unsafe_ptr_arg_deref)]
 
 use libc::c_char;
+use log::debug;
+use log::warn;
+use mmtk::vm::Scanning;
+use mmtk::vm::VMBinding;
+use std::sync::Arc;
+use std::sync::Mutex;
 use std::sync::atomic::Ordering;
 use std::ffi::CStr;
+use std::sync::mpsc;
+use std::thread;
 use mmtk::memory_manager;
 use mmtk::AllocationSemantics;
 use mmtk::util::{ObjectReference, Address};
 use mmtk::util::opaque_pointer::*;
 use mmtk::scheduler::{GCController, GCWorker};
 use mmtk::Mutator;
+use crate::MutatorClosure;
 use crate::ScalaNative;
 use crate::SINGLETON;
 use crate::BUILDER;
@@ -240,9 +249,71 @@ pub extern "C" fn get_max_non_los_default_alloc_bytes() -> usize {
         .max_non_los_default_alloc_bytes
 }
 
+// Define types for our requests and responses
+pub enum SyncRequest {
+    Acquire(VMWorkerThread, MutatorClosure),
+    Release(VMWorkerThread),
+}
+
+pub enum SyncResponse {
+    Acquired,
+    Released,
+}
+
+// Define global channels
+// Define global channels
+lazy_static! {
+    pub static ref REQ_SENDER: Mutex<mpsc::Sender<SyncRequest>> = {
+        let (sender, _) = mpsc::channel();
+        Mutex::new(sender)
+    };
+    pub static ref RES_RECEIVER: Mutex<mpsc::Receiver<SyncResponse>> = {
+        let (_, receiver) = mpsc::channel();
+        Mutex::new(receiver)
+    };
+}
+
 #[no_mangle]
 pub extern "C" fn scalanative_gc_init(calls: *const ScalaNative_Upcalls) {
     unsafe { UPCALLS = calls };
+    // Create channels for request and response
+    let (req_tx, req_rx) = mpsc::channel::<SyncRequest>();
+    let (res_tx, res_rx) = mpsc::channel::<SyncResponse>();
+
+    // Overwrite the global channels with the ones we just created
+    *REQ_SENDER.lock().unwrap() = req_tx;
+    *RES_RECEIVER.lock().unwrap() = res_rx;
+
+    // Spawn a dedicated thread that owns the lock
+    thread::Builder::new()
+        .name("MMTk Synchronizer Thread".to_string())
+        .spawn(move || {
+            debug!("Hello! This is MMTk Synchronizer Thread running!");
+            crate::register_gc_thread(thread::current().id());
+            unsafe { ((*UPCALLS).init_synchronizer_thread)()};
+    
+            let lock = Mutex::new(());
+            for req in req_rx {
+                match req {
+                    SyncRequest::Acquire(_tls, _mutator_visitor) => {
+                        let scan_mutators_in_safepoint = <ScalaNative as VMBinding>::VMScanning::SCAN_MUTATORS_IN_SAFEPOINT;
+                        let _guard = lock.lock().unwrap();
+                        unsafe { ((*UPCALLS).stop_all_mutators)(_tls, scan_mutators_in_safepoint, _mutator_visitor) };
+                        res_tx.send(SyncResponse::Acquired).unwrap();
+                    }
+                    SyncRequest::Release(tls) => {
+                        unsafe { ((*UPCALLS).resume_mutators)(tls) };
+                        res_tx.send(SyncResponse::Released).unwrap();
+                    }
+                }
+            }
+    
+            // Currently the MMTk controller thread should run forever.
+            // This is an unlikely event, but we log it anyway.
+            warn!("The MMTk Controller Thread is quitting!");
+            crate::unregister_gc_thread(thread::current().id());
+        })
+        .unwrap();
 }
 
 /// # Safety
@@ -251,4 +322,10 @@ pub extern "C" fn scalanative_gc_init(calls: *const ScalaNative_Upcalls) {
 pub unsafe extern "C" fn release_buffer(ptr: *mut Address, length: usize, capacity: usize) {
     // Take ownership and then drop it
     let _vec = Vec::<Address>::from_raw_parts(ptr, length, capacity);
+}
+
+#[no_mangle]
+pub extern "C" fn invoke_mutator_closure(closure: *mut MutatorClosure, mutator: *mut Mutator<ScalaNative>) {
+    let closure = unsafe { &mut *closure };
+    (closure.func)(mutator, &closure.data);
 }

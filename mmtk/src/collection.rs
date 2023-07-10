@@ -1,7 +1,7 @@
 use crate::MutatorClosure;
 use crate::SINGLETON;
 use crate::ScalaNative;
-use crate::ScalaNative_Upcalls;
+use crate::api::{SyncRequest, SyncResponse, REQ_SENDER, RES_RECEIVER};
 use crate::UPCALLS;
 use log::debug;
 use log::warn;
@@ -25,22 +25,19 @@ impl Collection<ScalaNative> for VMCollection {
     where
         F: FnMut(&'static mut Mutator<ScalaNative>),
     {
-        let scan_mutators_in_safepoint =
-        <ScalaNative as VMBinding>::VMScanning::SCAN_MUTATORS_IN_SAFEPOINT;
-
-        unsafe {
-            ((*UPCALLS).stop_all_mutators)(
-                _tls,
-                scan_mutators_in_safepoint,
-                MutatorClosure::from_rust_closure(&mut _mutator_visitor),
-            );
+        let result = REQ_SENDER.lock().unwrap().send(SyncRequest::Acquire(_tls, MutatorClosure::from_rust_closure(&mut _mutator_visitor)));
+        match result {
+            Err(err) => println!("Failed to send message: {:?}", err),
+            _ => ()
         }
     }
 
     fn resume_mutators(_tls: VMWorkerThread) {
-        unsafe {
-            ((*UPCALLS).resume_mutators)(_tls);
-        }
+        let result = REQ_SENDER.lock().unwrap().send(SyncRequest::Release(_tls));
+        match result {
+            Err(err) => println!("Failed to send message: {:?}", err),
+            _ => ()
+        }        
     }
 
     fn block_for_gc(_tls: VMMutatorThread) {

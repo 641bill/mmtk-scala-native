@@ -8,7 +8,7 @@ pub struct VMObjectModel {}
 
 // This is intentionally set to a non-zero value to see if it breaks.
 // Change this if you want to test other values.
-pub const OBJECT_REF_OFFSET: usize = 4;
+pub const OBJECT_REF_OFFSET: usize = 0;
 
 impl ObjectModel<ScalaNative> for VMObjectModel {
     const GLOBAL_LOG_BIT_SPEC: VMGlobalLogBitSpec = VMGlobalLogBitSpec::side_first();

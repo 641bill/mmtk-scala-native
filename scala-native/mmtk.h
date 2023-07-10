@@ -125,6 +125,7 @@ typedef struct {
 void invoke_MutatorClosure(MutatorClosure* closure, MMTk_Mutator mutator);
 NewBuffer invoke_EdgesClosure(EdgesClosure* closure, void** buf, size_t size, size_t capa);
 NewBuffer invoke_NodesClosure(NodesClosure* closure, void** buf, size_t size, size_t capa);
+extern void invoke_mutator_closure(MutatorClosure* closure, MMTk_Mutator mutator);
 
 typedef struct {
     int kind;
@@ -156,8 +157,9 @@ typedef struct {
     size_t (*number_of_mutators) ();
     void* (*get_mmtk_mutator) (void* tls);
 
-    void (*init_gc_worker_thread)( MMTk_GCThreadTLS *gc_worker_tls);
-    MMTk_GCThreadTLS* (*get_gc_thread_tls)(void);
+    void (*init_gc_worker_thread) (MMTk_GCThreadTLS *gc_worker_tls);
+    MMTk_GCThreadTLS* (*get_gc_thread_tls) ();
+    void (*init_synchronizer_thread) ();
 } ScalaNative_Upcalls;
 
 extern void scalanative_gc_init(ScalaNative_Upcalls *calls);
