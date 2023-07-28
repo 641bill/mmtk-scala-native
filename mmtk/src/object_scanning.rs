@@ -41,7 +41,6 @@ impl Display for Object {
 
 impl Display for ArrayHeader {
 	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-		// Assuming that the ArrayHeader is linked to a CharArray in the same way
 		let name_str: *mut StringObject = unsafe { std::mem::transmute((&*self.rtti).rt.name) };
 		let char_arr: *mut CharArray = unsafe { (*name_str).value };
 		let length = unsafe { (*char_arr).header.length as usize };
