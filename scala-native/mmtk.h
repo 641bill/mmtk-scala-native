@@ -28,7 +28,9 @@ extern const uintptr_t FREE_LIST_ALLOCATOR_SIZE;
 extern const char* get_mmtk_version();
 
 // Initialize an MMTk instance
-extern void mmtk_init(size_t heap_size);
+extern void mmtk_init(size_t min_heap_size, size_t max_heap_size);
+
+extern size_t mmtk_get_bytes_in_page();
 
 // Request MMTk to create a new mutator for the given `tls` thread
 extern MMTk_Mutator mmtk_bind_mutator(void* tls);

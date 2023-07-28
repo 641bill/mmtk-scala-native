@@ -1,8 +1,10 @@
 use std::{mem, fmt::Display, slice};
 
-use mmtk::{vm::{EdgeVisitor}, util::{constants::LOG_BYTES_IN_ADDRESS, ObjectReference, VMWorkerThread, Address}, memory_manager::is_mmtk_object};
+use mmtk::{vm::{EdgeVisitor}, util::{constants::LOG_BYTES_IN_ADDRESS, ObjectReference, VMWorkerThread, Address}, memory_manager::{is_mmtk_object, self}};
 
 use crate::{abi::*, edges::ScalaNativeEdge};
+
+const LAST_FIELD_OFFSET: i64 = -1;
 
 trait ObjIterate: Sized {
 	fn obj_iterate(&self, closure: &mut impl EdgeVisitor<ScalaNativeEdge>);
@@ -54,34 +56,69 @@ impl Display for ArrayHeader {
 	}
 }
 
+fn is_word_in_heap(word: Address) -> bool {
+	word >= memory_manager::starting_heap_address() && word <= memory_manager::last_heap_address()
+}
+
 impl ObjIterate for Object {
 	fn obj_iterate(&self, closure: &mut impl EdgeVisitor<ScalaNativeEdge>) {
-			// Go through the fields
-			let start: mmtk::util::Address = self.get_field_address();
-			let num_fields = self.num_fields();
-			for i in 0..num_fields {
-				let edge = start + (i << LOG_BYTES_IN_ADDRESS);
-
-				// Check if it's null first
-				if unsafe { edge.load::<Address>().is_zero() } {
-					// println!("Edge: {} is null in object: {}", edge, Address::from_ref(self));
-					continue;
+			let ptr_map: *mut i64 = unsafe { (&*self.rtti).ref_map_struct };
+			let mut i = 0;
+			// println!("fields length = {}", self.num_fields());
+			// println!("ptr_map: ");
+			// unsafe {
+			// 	while *ptr_map.offset(i) != LAST_FIELD_OFFSET {
+			// 			print!("{}", *ptr_map.offset(i));
+			// 			i += 1;
+			// 			if *ptr_map.offset(i) != LAST_FIELD_OFFSET {
+			// 					print!(", ");
+			// 			}
+			// 	}
+			// }
+			// println!();
+			// i = 0;
+			unsafe {
+				while *ptr_map.offset(i) != LAST_FIELD_OFFSET {
+					if self.is_referant_of_weak_reference((*ptr_map.offset(i)).try_into().unwrap()) {
+						i += 1;
+						continue
+					}
+					let start: mmtk::util::Address = self.get_field_address();
+					let edge = start + ((*ptr_map.offset(i) as usize) << LOG_BYTES_IN_ADDRESS);
+					if is_word_in_heap(edge.load()) {
+						if is_mmtk_object(edge.load()) { // Change to use bytemap metadata later
+							closure.visit_edge(edge);
+						}
+					}
+					i += 1;
 				}
-
-				if unsafe { !is_mmtk_object(edge.load::<Address>()) } {
-					// println!("Edge: {} with content: {}, is not a valid edge in object: {}, ", edge, unsafe { edge.load::<Address>() }, self);
-					continue;
-				}
-
-				// println!("Visiting edge: {}, in object: {}, with content: {}", edge, Address::from_ref(self), unsafe { edge.load::<Address>() });
-				
-				assert!(
-					unsafe { is_mmtk_object(edge.load::<Address>()) },
-					"{} is not a valid edge but is visited in the object: {}, which is a mmtk object: {}",
-					edge, self, is_mmtk_object(Address::from_ref(self))
-				);
-				closure.visit_edge(edge);
 			}
+			// // Go through the fields
+			// let start: mmtk::util::Address = self.get_field_address();
+			// let num_fields = self.num_fields();
+			// for i in 0..num_fields {
+			// 	let edge = start + (i << LOG_BYTES_IN_ADDRESS);
+
+			// 	// Check if it's null first
+			// 	if unsafe { edge.load::<Address>().is_zero() } {
+			// 		// println!("Edge: {} is null in object: {}", edge, Address::from_ref(self));
+			// 		continue;
+			// 	}
+
+			// 	if unsafe { !is_mmtk_object(edge.load::<Address>()) } {
+			// 		println!("Edge: {} with content: {}, is not a valid edge in object: {}, ", edge, unsafe { edge.load::<Address>() }, self);
+			// 		continue;
+			// 	}
+
+			// 	// println!("Visiting edge: {}, in object: {}, with content: {}", edge, Address::from_ref(self), unsafe { edge.load::<Address>() });
+				
+			// 	assert!(
+			// 		unsafe { is_mmtk_object(edge.load::<Address>()) },
+			// 		"{} is not a valid edge but is visited in the object: {}, which is a mmtk object: {}",
+			// 		edge, self, is_mmtk_object(Address::from_ref(self))
+			// 	);
+			// 	closure.visit_edge(edge);
+			// }
 	}
 }
 

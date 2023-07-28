@@ -73,7 +73,7 @@ impl FixtureContent for SingleObject {
     fn create() -> Self {
         const MB: usize = 1024 * 1024;
         // 1MB heap
-        mmtk_init(MB);
+        mmtk_init(MB, MB);
         mmtk_initialize_collection(VMThread::UNINITIALIZED);
         // Make sure GC does not run during test.
         mmtk_disable_collection();
@@ -101,7 +101,7 @@ impl FixtureContent for MMTKSingleton {
     fn create() -> Self {
         const MB: usize = 1024 * 1024;
         // 1MB heap
-        mmtk_init(MB);
+        mmtk_init(MB, MB);
         mmtk_initialize_collection(VMThread::UNINITIALIZED);
 
         MMTKSingleton {
@@ -119,7 +119,7 @@ impl FixtureContent for TwoObjects {
     fn create() -> Self {
         const MB: usize = 1024 * 1024;
         // 1MB heap
-        mmtk_init(MB);
+        mmtk_init(MB, MB);
         mmtk_initialize_collection(VMThread::UNINITIALIZED);
         // Make sure GC does not run during test.
         mmtk_disable_collection();
@@ -152,7 +152,7 @@ impl FixtureContent for MutatorFixture {
     fn create() -> Self {
         const MB: usize = 1024 * 1024;
         // 1MB heap
-        mmtk_init(MB);
+        mmtk_init(MB, MB);
         mmtk_initialize_collection(VMThread::UNINITIALIZED);
         // Make sure GC does not run during test.
         mmtk_disable_collection();

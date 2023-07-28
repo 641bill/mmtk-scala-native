@@ -1,8 +1,9 @@
+use log::trace;
 use mmtk::util::copy::{CopySemantics, GCWorkerCopyContext};
 use mmtk::util::{Address, ObjectReference};
 use mmtk::vm::*;
-use crate::ScalaNative;
-use crate::abi::*;
+use crate::{ScalaNative, UPCALLS};
+use crate::abi::{Object, Obj};
 
 pub struct VMObjectModel {}
 
@@ -22,15 +23,37 @@ impl ObjectModel<ScalaNative> for VMObjectModel {
     const NEED_VO_BITS_DURING_TRACING: bool = true;
 
     fn copy(
-        _from: ObjectReference,
-        _semantics: CopySemantics,
-        _copy_context: &mut GCWorkerCopyContext<ScalaNative>,
+        from: ObjectReference,
+        semantics: CopySemantics,
+        copy_context: &mut GCWorkerCopyContext<ScalaNative>,
     ) -> ObjectReference {
-        unimplemented!()
+        let bytes = Obj::from(from).size();
+        let dst = copy_context.alloc_copy(from, bytes, unsafe { ((*UPCALLS).get_allocation_alignment)() }, 0, semantics);
+        let src = from.to_raw_address();
+        unsafe { std::ptr::copy_nonoverlapping::<u8>(src.to_ptr(), dst.to_mut_ptr(), bytes) }
+        let to_obj = ObjectReference::from_raw_address(dst);
+        copy_context.post_copy(to_obj, bytes, semantics);
+        trace!("Copied object from {} to {}", from, to_obj);
+        #[cfg(feature = "clear_old_copy")]
+        {
+            trace!(
+                "Clearing old copy {} ({}-{})",
+                from,
+                src,
+                src + bytes
+            );
+            // For debug purpose, we clear the old copy so that if the SN VM reads from the old
+            // copy again, it will likely result in an error.
+            unsafe { std::ptr::write_bytes::<u8>(src.to_mut_ptr(), 0, bytes) }
+        }
+
+        to_obj
     }
 
     fn copy_to(_from: ObjectReference, _to: ObjectReference, _region: Address) -> Address {
-        unimplemented!()
+        unimplemented!(
+            "We don't support MarkCompact for Scala Native so this function cannot be called."
+        )
     }
 
     fn get_current_size(_object: ObjectReference) -> usize {
@@ -50,11 +73,13 @@ impl ObjectModel<ScalaNative> for VMObjectModel {
     }
 
     fn get_reference_when_copied_to(_from: ObjectReference, _to: Address) -> ObjectReference {
-        unimplemented!()
+        unimplemented!(
+            "We don't support MarkCompact for Scala Native so this function cannot be called."
+        )
     }
 
     fn get_type_descriptor(_reference: ObjectReference) -> &'static [i8] {
-        unimplemented!()
+        todo!()
     }
 
     fn ref_to_object_start(object: ObjectReference) -> Address {

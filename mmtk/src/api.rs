@@ -4,6 +4,7 @@
 use libc::c_char;
 use log::debug;
 use log::warn;
+use mmtk::util::constants;
 use mmtk::vm::Scanning;
 use mmtk::vm::VMBinding;
 use std::sync::Arc;
@@ -24,20 +25,30 @@ use crate::SINGLETON;
 use crate::BUILDER;
 use crate::ScalaNative_Upcalls;
 use crate::UPCALLS;
+use crate::abi::word_t;
 
 #[no_mangle]
-pub extern "C" fn mmtk_init(heap_size: usize) {
+pub extern "C" fn mmtk_init(min_heap_size: usize, max_heap_size: usize) {
     // set heap size first
     {
         let mut builder = BUILDER.lock().unwrap();
-        let success = builder.options.gc_trigger.set(mmtk::util::options::GCTriggerSelector::FixedHeapSize(heap_size));
-        assert!(success, "Failed to set heap size to {}", heap_size);
+        let success = builder.options.gc_trigger.set(mmtk::util::options::GCTriggerSelector::DynamicHeapSize(min_heap_size, max_heap_size));
+        assert!(success, "Failed to set min heap size to {} and max heap size to {}", min_heap_size, max_heap_size);
     }
 
     // Make sure MMTk has not yet been initialized
     assert!(!crate::MMTK_INITIALIZED.load(Ordering::SeqCst));
     // Initialize MMTk here
     lazy_static::initialize(&SINGLETON);
+}
+
+#[no_mangle]
+pub extern "C" fn mmtk_get_bytes_in_page() -> usize {
+    constants::BYTES_IN_PAGE
+}
+
+pub extern "C" fn mmtk_pin_object(addr: * mut word_t) -> bool {
+    memory_manager::pin_object::<ScalaNative>(addr)
 }
 
 #[no_mangle]
