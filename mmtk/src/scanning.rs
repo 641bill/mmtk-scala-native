@@ -82,6 +82,7 @@ impl Scanning<ScalaNative> for VMScanning {
             ((*UPCALLS).scan_roots_in_all_mutator_threads)(to_nodes_closure(&mut _factory));
         }
     }
+
     fn scan_roots_in_mutator_thread(
         _tls: VMWorkerThread,
         _mutator: &'static mut Mutator<ScalaNative>,
@@ -92,11 +93,13 @@ impl Scanning<ScalaNative> for VMScanning {
             ((*UPCALLS).scan_roots_in_mutator_thread)(to_nodes_closure(&mut _factory), tls);
         }
     }
+
     fn scan_vm_specific_roots(_tls: VMWorkerThread, mut _factory: impl RootsWorkFactory<ScalaNativeEdge>) {
         unsafe {
             ((*UPCALLS).scan_vm_specific_roots)(to_nodes_closure(&mut _factory));
         }
     }
+
     fn scan_object<EV: EdgeVisitor<ScalaNativeEdge>>(
         _tls: VMWorkerThread,
         _object: ObjectReference,
@@ -104,6 +107,7 @@ impl Scanning<ScalaNative> for VMScanning {
     ) {
         crate::object_scanning::scan_object(_tls, _object, _edge_visitor);
     }
+
     // fn scan_object_with_klass(
     //         _tls: VMWorkerThread,
     //         _object: ObjectReference,
@@ -115,12 +119,22 @@ impl Scanning<ScalaNative> for VMScanning {
     fn notify_initial_thread_scan_complete(_partial_scan: bool, _tls: VMWorkerThread) {
         // do nothing
     }
+
     fn supports_return_barrier() -> bool {
         unimplemented!()
     }
+
     fn prepare_for_roots_re_scanning() {
         unsafe {
             ((*UPCALLS).prepare_for_roots_re_scanning)();
         }
+    }
+
+    fn process_weak_refs(
+            _worker: &mut mmtk::scheduler::GCWorker<ScalaNative>,
+            _tracer_context: impl mmtk::vm::ObjectTracerContext<ScalaNative>,
+        ) -> bool {
+        crate::binding().unpin_pinned_objects();
+        false
     }
 }

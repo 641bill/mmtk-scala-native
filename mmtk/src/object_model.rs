@@ -22,6 +22,8 @@ impl ObjectModel<ScalaNative> for VMObjectModel {
     const OBJECT_REF_OFFSET_LOWER_BOUND: isize = OBJECT_REF_OFFSET as isize;
     const NEED_VO_BITS_DURING_TRACING: bool = true;
 
+    const LOCAL_PINNING_BIT_SPEC: VMLocalPinningBitSpec = VMLocalPinningBitSpec::side_after(Self::LOCAL_LOS_MARK_NURSERY_SPEC.as_spec());
+   
     fn copy(
         from: ObjectReference,
         semantics: CopySemantics,

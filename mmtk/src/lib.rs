@@ -4,6 +4,7 @@ extern crate mmtk;
 extern crate lazy_static;
 
 use abi::GCThreadTLS;
+use binding::ScalaNativeBinding;
 use libc::size_t;
 use libc::uintptr_t;
 use mmtk::Mutator;
@@ -25,6 +26,7 @@ pub mod reference_glue;
 pub mod scanning;
 pub mod abi;
 pub mod object_scanning;
+pub mod binding;
 
 mod edges;
 #[cfg(test)]
@@ -50,6 +52,15 @@ impl VMBinding for ScalaNative {
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Mutex;
 use std::thread::ThreadId;
+
+/// The singleton object for the ScalaNative binding itself.
+pub static BINDING: OnceCell<ScalaNativeBinding> = OnceCell::new();
+
+pub fn binding<'b>() -> &'b ScalaNativeBinding {
+    BINDING
+        .get()
+        .expect("Attempt to use the binding before it's initialization")
+}
 
 /// This is used to ensure we initialize MMTk at a specified timing.
 pub static MMTK_INITIALIZED: AtomicBool = AtomicBool::new(false);

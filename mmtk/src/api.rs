@@ -2,12 +2,14 @@
 #![allow(clippy::not_unsafe_ptr_arg_deref)]
 
 use libc::c_char;
+use libc::c_float;
+use libc::size_t;
 use log::debug;
 use log::warn;
 use mmtk::util::constants;
 use mmtk::vm::Scanning;
 use mmtk::vm::VMBinding;
-use std::sync::Arc;
+use core::panic;
 use std::sync::Mutex;
 use std::sync::atomic::Ordering;
 use std::ffi::CStr;
@@ -25,7 +27,9 @@ use crate::SINGLETON;
 use crate::BUILDER;
 use crate::ScalaNative_Upcalls;
 use crate::UPCALLS;
+use crate::abi::Obj;
 use crate::abi::word_t;
+use crate::binding::ScalaNativeBinding;
 
 #[no_mangle]
 pub extern "C" fn mmtk_init(min_heap_size: usize, max_heap_size: usize) {
@@ -47,8 +51,27 @@ pub extern "C" fn mmtk_get_bytes_in_page() -> usize {
     constants::BYTES_IN_PAGE
 }
 
+#[no_mangle]
 pub extern "C" fn mmtk_pin_object(addr: * mut word_t) -> bool {
-    memory_manager::pin_object::<ScalaNative>(addr)
+    memory_manager::pin_object::<ScalaNative>(unsafe { ObjectReference::from_raw_address(Address::from_usize(addr as usize)) })
+}
+
+#[no_mangle]
+pub extern "C" fn mmtk_append_pinned_objects(data: *const *const usize, len: size_t) {
+    let mut vec = unsafe { 
+        std::slice::from_raw_parts(data, len)
+        .to_vec()
+        .iter()
+        .map(|x| ObjectReference::from_raw_address(Address::from_usize(*x as usize)))
+        .collect() };
+    let mut pinned_objects = crate::binding().pinned_objects.lock().unwrap();
+    pinned_objects.append(&mut vec)
+}
+
+#[no_mangle]
+pub extern "C" fn mmtk_init_binding(upcalls: *const ScalaNative_Upcalls) {
+    let binding = ScalaNativeBinding::new(&SINGLETON, upcalls);
+    crate::BINDING.set(binding).unwrap_or_else(|_| panic!("Binding already initialized"));
 }
 
 #[no_mangle]

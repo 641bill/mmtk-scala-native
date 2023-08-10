@@ -98,6 +98,9 @@ extern void release_buffer(void** buf, size_t size, size_t capa);
 extern void* mmtk_starting_heap_address();
 extern void* mmtk_last_heap_address();
 
+extern void mmtk_append_pinned_objects(uintptr_t* const *data, size_t len);
+extern bool mmtk_pin_object(uintptr_t* addr);
+
 /**
  * VM Accounting
  */
@@ -166,6 +169,7 @@ typedef struct {
 } ScalaNative_Upcalls;
 
 extern void scalanative_gc_init(ScalaNative_Upcalls *calls);
+extern void mmtk_init_binding(const ScalaNative_Upcalls *upcalls);
 
 #ifdef __cplusplus
 }
