@@ -235,3 +235,8 @@ impl GCThreadTLS {
 			unsafe { &mut *(self.gc_context as *mut GCWorker<ScalaNative>) }
 	}
 }
+
+#[repr(C)]
+pub struct EdgeVisitorWrapper {
+	
+}

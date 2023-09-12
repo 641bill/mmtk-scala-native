@@ -3,7 +3,9 @@ extern crate mmtk;
 #[macro_use]
 extern crate lazy_static;
 
+use abi::ArrayHeader;
 use abi::GCThreadTLS;
+use abi::Object;
 use binding::ScalaNativeBinding;
 use libc::size_t;
 use libc::uintptr_t;
@@ -193,6 +195,8 @@ pub struct ScalaNative_Upcalls {
     pub scan_roots_in_mutator_thread: extern "C" fn(closure: NodesClosure, tls: VMMutatorThread),
     pub scan_vm_specific_roots: extern "C" fn(closure: NodesClosure),
     pub prepare_for_roots_re_scanning: extern "C" fn(),
+    pub mmtk_obj_iterate: extern "C" fn(obj: &Object, closure: *mut std::ffi::c_void),
+    pub mmtk_array_iterate: extern "C" fn(obj: &ArrayHeader, closure: *mut std::ffi::c_void),
 
     // active_plan
     pub get_mutators: extern "C" fn(closure: MutatorClosure),
