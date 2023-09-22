@@ -1,7 +1,11 @@
+use std::panic;
+use std::panic::resume_unwind;
+
 use crate::EdgesClosure;
 use crate::NewBuffer;
 use crate::NodesClosure;
 use crate::ScalaNative;
+use crate::abi::Obj;
 use crate::edges::ScalaNativeEdge;
 use mmtk::MutatorContext;
 use mmtk::util::Address;
@@ -53,13 +57,23 @@ extern "C" fn report_nodes_and_renew_buffer<F: RootsWorkFactory<ScalaNativeEdge>
 ) -> NewBuffer {
     if !ptr.is_null() {
         let address_buf = unsafe { Vec::<Address>::from_raw_parts(ptr, length, capacity) };
-        let buf = address_buf.into_iter().map(|addr| ObjectReference::from_raw_address(addr)).collect();
+        let buf: Vec<ObjectReference> = address_buf.into_iter().map(|addr| ObjectReference::from_raw_address(addr)).collect();
         let factory: &mut F = unsafe { &mut *(factory_ptr as *mut F) };
-        factory.create_process_node_roots_work(buf);
+        let buf_clone = buf.clone();
+        let result = panic::catch_unwind(panic::AssertUnwindSafe(|| {
+        factory.create_process_pinning_roots_work(buf);
+        }));
+        if result.is_err() {
+            // Dump information
+            let object_ref = buf_clone[0];
+            let obj = Obj::from(object_ref);
+            println!("Marking invalid Object: {}", obj);
+            panic!("Resuming the panic");
+        }
     }
     let (ptr, _, capacity) = {
         use std::mem::ManuallyDrop;
-        let new_vec = Vec::with_capacity(WORK_PACKET_CAPACITY);
+        let new_vec = Vec::with_capacity(1);
         let mut me = ManuallyDrop::new(new_vec);
         (me.as_mut_ptr(), me.len(), me.capacity())
     };
@@ -74,14 +88,14 @@ pub(crate) fn to_nodes_closure<F: RootsWorkFactory<ScalaNativeEdge>>(factory: &m
 }
 
 impl Scanning<ScalaNative> for VMScanning {
-    const SCAN_MUTATORS_IN_SAFEPOINT: bool = true;
-    const SINGLE_THREAD_MUTATOR_SCANNING: bool = true;
+//     const SCAN_MUTATORS_IN_SAFEPOINT: bool = true;
+//     const SINGLE_THREAD_MUTATOR_SCANNING: bool = true;
 
-    fn scan_roots_in_all_mutator_threads(_tls: VMWorkerThread, mut _factory: impl RootsWorkFactory<ScalaNativeEdge>) {
-        unsafe {
-            ((*UPCALLS).scan_roots_in_all_mutator_threads)(to_nodes_closure(&mut _factory));
-        }
-    }
+    // fn scan_roots_in_all_mutator_threads(_tls: VMWorkerThread, mut _factory: impl RootsWorkFactory<ScalaNativeEdge>) {
+    //     unsafe {
+    //         ((*UPCALLS).scan_roots_in_all_mutator_threads)(to_nodes_closure(&mut _factory));
+    //     }
+    // }
 
     fn scan_roots_in_mutator_thread(
         _tls: VMWorkerThread,
@@ -135,6 +149,10 @@ impl Scanning<ScalaNative> for VMScanning {
             _tracer_context: impl mmtk::vm::ObjectTracerContext<ScalaNative>,
         ) -> bool {
         crate::binding().unpin_pinned_objects();
+        unsafe {
+            ((*UPCALLS).weak_ref_stack_nullify)();
+            ((*UPCALLS).weak_ref_stack_call_handlers)();
+        }
         false
     }
 }

@@ -195,8 +195,10 @@ pub struct ScalaNative_Upcalls {
     pub scan_roots_in_mutator_thread: extern "C" fn(closure: NodesClosure, tls: VMMutatorThread),
     pub scan_vm_specific_roots: extern "C" fn(closure: NodesClosure),
     pub prepare_for_roots_re_scanning: extern "C" fn(),
-    pub mmtk_obj_iterate: extern "C" fn(obj: &Object, closure: *mut std::ffi::c_void),
-    pub mmtk_array_iterate: extern "C" fn(obj: &ArrayHeader, closure: *mut std::ffi::c_void),
+    pub mmtk_obj_iterate: extern "C" fn(obj: *const Object, closure: *mut std::ffi::c_void),
+    pub mmtk_array_iterate: extern "C" fn(obj: *const ArrayHeader, closure: *mut std::ffi::c_void),
+    pub weak_ref_stack_nullify: extern "C" fn(),
+    pub weak_ref_stack_call_handlers: extern "C" fn(),
 
     // active_plan
     pub get_mutators: extern "C" fn(closure: MutatorClosure),

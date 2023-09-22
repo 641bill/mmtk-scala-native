@@ -112,13 +112,13 @@ impl Collection<ScalaNative> for VMCollection {
     //     }
     // }
 
-    fn prepare_mutator<T: MutatorContext<ScalaNative>>(
-        _tls_w: VMWorkerThread,
-        _tls_m: VMMutatorThread,
-        _mutator: &T,
-    ) {
-        // do nothing
-    }
+    // fn prepare_mutator<T: MutatorContext<ScalaNative>>(
+    //     _tls_w: VMWorkerThread,
+    //     _tls_m: VMMutatorThread,
+    //     _mutator: &T,
+    // ) {
+    //     // do nothing
+    // }
     fn out_of_memory(tls: VMThread, err_kind: AllocationError) {
         unsafe {
             ((*UPCALLS).out_of_memory)(tls, err_kind);

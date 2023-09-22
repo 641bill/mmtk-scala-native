@@ -1,8 +1,7 @@
 use std::{mem, fmt::Display, slice};
-
-use mmtk::{vm::{EdgeVisitor}, util::{constants::LOG_BYTES_IN_ADDRESS, ObjectReference, VMWorkerThread, Address}, memory_manager::{is_mmtk_object, self}};
-
+use mmtk::{vm::{EdgeVisitor, edge_shape::Edge}, util::{constants::LOG_BYTES_IN_ADDRESS, ObjectReference, VMWorkerThread, Address}, memory_manager::{is_mmtk_object, self}};
 use crate::{abi::*, edges::ScalaNativeEdge};
+use crate::UPCALLS;
 
 const LAST_FIELD_OFFSET: i64 = -1;
 
@@ -59,18 +58,48 @@ fn is_word_in_heap(word: Address) -> bool {
 	word >= memory_manager::starting_heap_address() && word <= memory_manager::last_heap_address()
 }
 
+// Modify the ClosureWrapper to hold an EdgeVisitor
+pub struct ClosureWrapper<'a, ES: Edge> {
+	closure: &'a mut dyn EdgeVisitor<ES>,
+}
+
+impl<'a, ES: Edge> EdgeVisitor<ES> for ClosureWrapper<'a, ES> {
+	fn visit_edge(&mut self, edge: ES) {
+			self.closure.visit_edge(edge);
+	}
+}
+
 impl ObjIterate for Object {
 	fn obj_iterate(&self, closure: &mut impl EdgeVisitor<ScalaNativeEdge>) {
-		 let closure_ptr: *mut F = closure;
-		 unsafe {
-			((*UPCALLS).mmtk_obj_iterate)(self, closure_ptr as *mut std::ffi::c_void);
-		 }
+		let mut wrapper = ClosureWrapper { closure };
+		let closure_ptr: *mut _ = &mut wrapper;// Convert &self to a raw pointer
+		let self_ptr: *const Object = self;
+		
+		use std::panic::{catch_unwind, AssertUnwindSafe};
+		
+		let result = catch_unwind(AssertUnwindSafe(|| {
+				let closure_ptr: *mut _ = &mut *closure;
+				unsafe {
+						((*UPCALLS).mmtk_obj_iterate)(self_ptr, closure_ptr as *mut std::ffi::c_void);
+				}
+		}));
+		
+		if result.is_err() {
+				print!("Scanning Object: {}, contains invalid edges", self);
+				panic!("Stop the world")
+		}
 	}
 }
 
 impl ObjIterate for ArrayHeader {
 	fn obj_iterate(&self, closure: &mut impl EdgeVisitor<ScalaNativeEdge>) {
-
+		let mut wrapper = ClosureWrapper { closure };
+		let closure_ptr: *mut _ = &mut wrapper;
+		let self_ptr: *const ArrayHeader = self;
+		
+		unsafe {
+				((*UPCALLS).mmtk_array_iterate)(self_ptr, closure_ptr as *mut std::ffi::c_void);
+		}
 	}
 }
 

@@ -6,6 +6,7 @@
 #include <sys/types.h>
 #include <stdint.h>
 #include <stdio.h>
+#include "../../scala-native/nativelib/src/main/resources/scala-native/gc/immix_commix/headers/ObjectHeader.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -131,6 +132,7 @@ void invoke_MutatorClosure(MutatorClosure* closure, MMTk_Mutator mutator);
 NewBuffer invoke_EdgesClosure(EdgesClosure* closure, void** buf, size_t size, size_t capa);
 NewBuffer invoke_NodesClosure(NodesClosure* closure, void** buf, size_t size, size_t capa);
 extern void invoke_mutator_closure(MutatorClosure* closure, MMTk_Mutator mutator);
+extern void visit_edge(void* edge_visitor, void* edge);
 
 typedef struct {
     int kind;
@@ -157,6 +159,10 @@ typedef struct {
     void (*scan_roots_in_mutator_thread) (NodesClosure closure, void* tls);
     void (*scan_vm_specific_roots) (NodesClosure closure);
     void (*prepare_for_roots_re_scanning) ();
+    void (*mmtk_obj_iterate) (const Object* obj, void* closure);
+    void (*mmtk_array_iterate) (const ArrayHeader* obj, void* closure);
+    void (*weak_ref_stack_nullify) ();
+    void (*weak_ref_stack_call_handlers) ();
 
     void (*get_mutators) (MutatorClosure closure);
     bool (*is_mutator) (void* tls);

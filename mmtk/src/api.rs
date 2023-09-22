@@ -6,7 +6,9 @@ use libc::c_float;
 use libc::size_t;
 use log::debug;
 use log::warn;
+use mmtk::memory_manager::is_mmtk_object;
 use mmtk::util::constants;
+use mmtk::vm::EdgeVisitor;
 use mmtk::vm::Scanning;
 use mmtk::vm::VMBinding;
 use core::panic;
@@ -30,6 +32,8 @@ use crate::UPCALLS;
 use crate::abi::Obj;
 use crate::abi::word_t;
 use crate::binding::ScalaNativeBinding;
+use crate::edges::ScalaNativeEdge;
+use crate::object_scanning::ClosureWrapper;
 
 #[no_mangle]
 pub extern "C" fn mmtk_init(min_heap_size: usize, max_heap_size: usize) {
@@ -330,7 +334,7 @@ pub extern "C" fn scalanative_gc_init(calls: *const ScalaNative_Upcalls) {
             for req in req_rx {
                 match req {
                     SyncRequest::Acquire(_tls, _mutator_visitor) => {
-                        let scan_mutators_in_safepoint = <ScalaNative as VMBinding>::VMScanning::SCAN_MUTATORS_IN_SAFEPOINT;
+                        let scan_mutators_in_safepoint = true;
                         let _guard = lock.lock().unwrap();
                         unsafe { ((*UPCALLS).stop_all_mutators)(_tls, scan_mutators_in_safepoint, _mutator_visitor) };
                         res_tx.send(SyncResponse::Acquired).unwrap();
@@ -362,4 +366,15 @@ pub unsafe extern "C" fn release_buffer(ptr: *mut Address, length: usize, capaci
 pub extern "C" fn invoke_mutator_closure(closure: *mut MutatorClosure, mutator: *mut Mutator<ScalaNative>) {
     let closure = unsafe { &mut *closure };
     (closure.func)(mutator, &closure.data);
+}
+
+#[no_mangle]
+pub extern "C" fn visit_edge(closure_ptr: *mut std::ffi::c_void, edge: Address) {
+    let closure = unsafe { &mut *(closure_ptr as *mut ClosureWrapper<ScalaNativeEdge>) };
+    if unsafe { !is_mmtk_object(edge.load::<Address>()) } {
+        println!("Edge: {} with content: {}, is not a valid edge, ", edge, unsafe { edge.load::<Address>() });
+        panic!("Propagating the panic");
+    } else {
+        closure.visit_edge(edge);
+    }
 }
