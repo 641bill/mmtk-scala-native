@@ -141,6 +141,16 @@ typedef struct {
 typedef MMTk_GCThreadTLS* MMTk_VMWorkerThread;
 
 typedef struct {
+    uintptr_t **stackTop;
+    uintptr_t **stackBottom;
+} StackRange;
+
+typedef struct {
+    uintptr_t **regs;
+    size_t regsSize;
+} RegsRange;
+
+typedef struct {
     void (*stop_all_mutators) (void *tls, bool scan_mutators_in_safepoint, MutatorClosure closure);
     void (*resume_mutators) (void *tls);
     void (*block_for_gc) (void *tls);
@@ -154,6 +164,11 @@ typedef struct {
     int (*get_array_ids_min) ();
     int (*get_array_ids_max) ();
     size_t (*get_allocation_alignment) ();
+
+    StackRange (*mmtk_get_stack_range) (void* thread);
+    RegsRange (*mmtk_get_regs_range) (void* thread);
+    word_t* (*mmtk_get_modules)();
+    int (*mmkt_get_modules_size)();
 
     void (*scan_roots_in_all_mutator_threads) (NodesClosure closure);
     void (*scan_roots_in_mutator_thread) (NodesClosure closure, void* tls);

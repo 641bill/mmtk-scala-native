@@ -1,10 +1,14 @@
-use std::{mem, fmt::Display, slice};
+use std::{mem, fmt::Display, slice, sync::Mutex};
 use mmtk::{vm::{EdgeVisitor, edge_shape::Edge}, util::{constants::LOG_BYTES_IN_ADDRESS, ObjectReference, VMWorkerThread, Address}, memory_manager::{is_mmtk_object, self}};
-use crate::{abi::*, edges::ScalaNativeEdge};
-use crate::UPCALLS;
+use crate::{abi::*, edges::ScalaNativeEdge, UPCALLS};
+use crate::scanning::mmtk_scan_field;
 
 const LAST_FIELD_OFFSET: i64 = -1;
-
+lazy_static! {
+	static ref __object_array_id: Mutex<i32> = Mutex::new(unsafe {
+		((*UPCALLS).get_object_array_id)()
+	});
+}
 trait ObjIterate: Sized {
 	fn obj_iterate(&self, closure: &mut impl EdgeVisitor<ScalaNativeEdge>);
 }
@@ -71,34 +75,32 @@ impl<'a, ES: Edge> EdgeVisitor<ES> for ClosureWrapper<'a, ES> {
 
 impl ObjIterate for Object {
 	fn obj_iterate(&self, closure: &mut impl EdgeVisitor<ScalaNativeEdge>) {
-		let mut wrapper = ClosureWrapper { closure };
-		let closure_ptr: *mut _ = &mut wrapper;// Convert &self to a raw pointer
-		let self_ptr: *const Object = self;
-		
-		use std::panic::{catch_unwind, AssertUnwindSafe};
-		
-		let result = catch_unwind(AssertUnwindSafe(|| {
-				let closure_ptr: *mut _ = &mut *closure;
-				unsafe {
-						((*UPCALLS).mmtk_obj_iterate)(self_ptr, closure_ptr as *mut std::ffi::c_void);
+		let ptr_map: *mut i64 = unsafe { (*(self.rtti)).ref_map_struct };
+		let mut i = 0;
+		unsafe {
+			while *ptr_map.offset(i) != LAST_FIELD_OFFSET {
+				let offset = *ptr_map.offset(i);
+				if self.is_referant_of_weak_reference(offset.try_into().unwrap()) {
+					i += 1;
+					continue
 				}
-		}));
-		
-		if result.is_err() {
-				print!("Scanning Object: {}, contains invalid edges", self);
-				panic!("Stop the world")
+				let field = self.fields[offset as usize];
+				mmtk_scan_field(field, closure);
+				i += 1;
+			}
 		}
 	}
 }
 
 impl ObjIterate for ArrayHeader {
 	fn obj_iterate(&self, closure: &mut impl EdgeVisitor<ScalaNativeEdge>) {
-		let mut wrapper = ClosureWrapper { closure };
-		let closure_ptr: *mut _ = &mut wrapper;
-		let self_ptr: *const ArrayHeader = self;
-		
-		unsafe {
-				((*UPCALLS).mmtk_array_iterate)(self_ptr, closure_ptr as *mut std::ffi::c_void);
+		let fields: *mut *mut word_t = 
+			((self as *const _ as usize) + std::mem::size_of::<ArrayHeader>()) as *mut *mut word_t;
+		if unsafe{ ( *(self.rtti) ).rt.id } == *__object_array_id.lock().unwrap() {
+			for i in 0..self.length {
+				let field = unsafe { *(fields.offset(i as isize)) };
+				mmtk_scan_field(field, closure);
+			}
 		}
 	}
 }

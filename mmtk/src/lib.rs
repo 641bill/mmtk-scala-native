@@ -6,6 +6,7 @@ extern crate lazy_static;
 use abi::ArrayHeader;
 use abi::GCThreadTLS;
 use abi::Object;
+use abi::word_t;
 use binding::ScalaNativeBinding;
 use libc::size_t;
 use libc::uintptr_t;
@@ -158,7 +159,19 @@ pub struct NodesClosure {
         cap: usize,
         data: *mut libc::c_void,
     ) -> NewBuffer,
-    pub data: *const libc::c_void,
+    pub data: *mut libc::c_void,
+}
+
+#[repr(C)]
+pub struct StackRange {
+    stack_top: *mut *mut usize,
+    stack_bottom: *mut *mut usize,
+}
+
+#[repr(C)]
+pub struct RegsRange {
+    regs: *mut *mut usize,
+    regs_size: usize,
 }
 
 #[repr(C)]
@@ -189,6 +202,10 @@ pub struct ScalaNative_Upcalls {
     pub get_allocation_alignment: extern "C" fn() -> size_t,
 
     // scanning
+    pub get_stack_range: extern "C" fn(tls: VMMutatorThread) -> StackRange,
+    pub get_regs_range: extern "C" fn(tls: VMMutatorThread) -> RegsRange,
+    pub get_modules: extern "C" fn() -> *mut word_t,
+    pub get_modules_size: extern "C" fn() -> i32,
     /// Scan all the mutators for roots.
     pub scan_roots_in_all_mutator_threads: extern "C" fn(closure: NodesClosure),
     /// Scan one mutator for roots.
