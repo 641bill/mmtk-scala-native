@@ -8,6 +8,7 @@ use abi::GCThreadTLS;
 use abi::Object;
 use abi::word_t;
 use binding::ScalaNativeBinding;
+use collection::SendCtxPtr;
 use libc::size_t;
 use libc::uintptr_t;
 use mmtk::Mutator;
@@ -222,7 +223,7 @@ pub struct ScalaNative_Upcalls {
     pub is_mutator: extern "C" fn(tls: VMThread) -> bool,
     pub number_of_mutators: extern "C" fn() -> size_t,
     pub get_mmtk_mutator: extern "C" fn(tls: VMMutatorThread) -> *mut Mutator<ScalaNative>,
-    pub init_gc_worker_thread: extern "C" fn(tls: *mut GCThreadTLS),
+    pub init_gc_worker_thread: extern "C" fn(tls: *mut GCThreadTLS, ctx: SendCtxPtr),
     pub get_gc_thread_tls: extern "C" fn() -> *mut GCThreadTLS,
     pub init_synchronizer_thread: extern "C" fn(),
 }

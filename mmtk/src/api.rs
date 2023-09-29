@@ -2,15 +2,12 @@
 #![allow(clippy::not_unsafe_ptr_arg_deref)]
 
 use libc::c_char;
-use libc::c_float;
 use libc::size_t;
 use log::debug;
 use log::warn;
 use mmtk::memory_manager::is_mmtk_object;
 use mmtk::util::constants;
 use mmtk::vm::EdgeVisitor;
-use mmtk::vm::Scanning;
-use mmtk::vm::VMBinding;
 use core::panic;
 use std::sync::Mutex;
 use std::sync::atomic::Ordering;
@@ -29,7 +26,6 @@ use crate::SINGLETON;
 use crate::BUILDER;
 use crate::ScalaNative_Upcalls;
 use crate::UPCALLS;
-use crate::abi::Obj;
 use crate::abi::word_t;
 use crate::binding::ScalaNativeBinding;
 use crate::edges::ScalaNativeEdge;

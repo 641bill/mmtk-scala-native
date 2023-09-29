@@ -1,7 +1,7 @@
 use crate::MutatorClosure;
 use crate::SINGLETON;
 use crate::ScalaNative;
-use crate::api::{SyncRequest, SyncResponse, REQ_SENDER, RES_RECEIVER};
+use crate::api::{SyncRequest, REQ_SENDER};
 use crate::UPCALLS;
 use log::debug;
 use log::warn;
@@ -9,8 +9,8 @@ use mmtk::memory_manager;
 use mmtk::util::alloc::AllocationError;
 use mmtk::util::opaque_pointer::*;
 use mmtk::Mutator;
-use mmtk::MutatorContext;
-use mmtk::vm::{Collection, GCThreadContext, Scanning, VMBinding};
+use mmtk::vm::{Collection, GCThreadContext};
+
 use std::thread;
 use mmtk::scheduler::*;
 use crate::abi::GCThreadTLS;
@@ -19,6 +19,11 @@ pub struct VMCollection {}
 
 pub const GC_THREAD_KIND_CONTROLLER: libc::c_int = 0;
 pub const GC_THREAD_KIND_WORKER: libc::c_int = 1;
+
+#[repr(C)]
+pub struct SendCtxPtr(*mut libc::c_void);
+
+unsafe impl Send for SendCtxPtr {}
 
 impl Collection<ScalaNative> for VMCollection {
     fn stop_all_mutators<F>(_tls: VMWorkerThread, mut _mutator_visitor: F)
@@ -49,6 +54,9 @@ impl Collection<ScalaNative> for VMCollection {
     fn spawn_gc_thread(_tls: VMThread, ctx: GCThreadContext<ScalaNative>) {
         match ctx {
             GCThreadContext::Controller(mut controller) => {
+                let ctx_ptr = &*controller as *const _ as *mut libc::c_void;
+                let send_ctx_ptr = SendCtxPtr(ctx_ptr);
+
                 thread::Builder::new()
                     .name("MMTk Controller Thread".to_string())
                     .spawn(move || {
@@ -57,7 +65,10 @@ impl Collection<ScalaNative> for VMCollection {
                         let ptr_controller = &mut *controller as *mut GCController<ScalaNative>;
                         let gc_thread_tls =
                             Box::into_raw(Box::new(GCThreadTLS::for_controller(ptr_controller)));
-                        (unsafe { (*UPCALLS).init_gc_worker_thread })(gc_thread_tls);
+                        unsafe {
+                             ((*UPCALLS).init_gc_worker_thread)(gc_thread_tls, send_ctx_ptr);
+                        
+                        };
                         memory_manager::start_control_collector(
                             &SINGLETON,
                             GCThreadTLS::to_vwt(gc_thread_tls),
@@ -72,6 +83,9 @@ impl Collection<ScalaNative> for VMCollection {
                     .unwrap();
             }
             GCThreadContext::Worker(mut worker) => {
+                let ctx_ptr = &*worker as *const _ as *mut libc::c_void;
+                let send_ctx_ptr = SendCtxPtr(ctx_ptr);
+            
                 thread::Builder::new()
                     .name("MMTk Worker Thread".to_string())
                     .spawn(move || {
@@ -80,7 +94,7 @@ impl Collection<ScalaNative> for VMCollection {
                         let ptr_worker = &mut *worker as *mut GCWorker<ScalaNative>;
                         let gc_thread_tls =
                             Box::into_raw(Box::new(GCThreadTLS::for_worker(ptr_worker)));
-                        (unsafe { (*UPCALLS).init_gc_worker_thread })(gc_thread_tls);
+                        (unsafe { (*UPCALLS).init_gc_worker_thread })(gc_thread_tls, send_ctx_ptr);
                         memory_manager::start_worker(
                             &SINGLETON,
                             GCThreadTLS::to_vwt(gc_thread_tls),

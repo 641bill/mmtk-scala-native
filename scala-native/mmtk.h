@@ -151,6 +151,10 @@ typedef struct {
 } RegsRange;
 
 typedef struct {
+    void* ptr;
+} SendCtxPtr;
+
+typedef struct {
     void (*stop_all_mutators) (void *tls, bool scan_mutators_in_safepoint, MutatorClosure closure);
     void (*resume_mutators) (void *tls);
     void (*block_for_gc) (void *tls);
@@ -184,7 +188,7 @@ typedef struct {
     size_t (*number_of_mutators) ();
     void* (*get_mmtk_mutator) (void* tls);
 
-    void (*init_gc_worker_thread) (MMTk_GCThreadTLS *gc_worker_tls);
+    void (*init_gc_worker_thread) (MMTk_GCThreadTLS *gc_worker_tls, SendCtxPtr ctx_ptr);
     MMTk_GCThreadTLS* (*get_gc_thread_tls) ();
     void (*init_synchronizer_thread) ();
 } ScalaNative_Upcalls;
