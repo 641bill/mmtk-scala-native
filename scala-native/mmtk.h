@@ -6,7 +6,6 @@
 #include <sys/types.h>
 #include <stdint.h>
 #include <stdio.h>
-#include "../../scala-native/nativelib/src/main/resources/scala-native/gc/immix_commix/headers/ObjectHeader.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -154,8 +153,11 @@ typedef struct {
     void* ptr;
 } SendCtxPtr;
 
+typedef struct MutatorThreadNode MutatorThreadNode;
+typedef uintptr_t word_t;
+
 typedef struct {
-    void (*stop_all_mutators) (void *tls, bool scan_mutators_in_safepoint, MutatorClosure closure);
+    void (*stop_all_mutators) (void *tls, MutatorClosure closure);
     void (*resume_mutators) (void *tls);
     void (*block_for_gc) (void *tls);
     void (*out_of_memory) (void* tls, MMTkAllocationError err_kind);
@@ -173,13 +175,12 @@ typedef struct {
     RegsRange (*mmtk_get_regs_range) (void* thread);
     word_t* (*mmtk_get_modules)();
     int (*mmkt_get_modules_size)();
+    MutatorThreadNode* (*mmtk_get_mutator_threads)();
 
     void (*scan_roots_in_all_mutator_threads) (NodesClosure closure);
     void (*scan_roots_in_mutator_thread) (NodesClosure closure, void* tls);
     void (*scan_vm_specific_roots) (NodesClosure closure);
     void (*prepare_for_roots_re_scanning) ();
-    void (*mmtk_obj_iterate) (const Object* obj, void* closure);
-    void (*mmtk_array_iterate) (const ArrayHeader* obj, void* closure);
     void (*weak_ref_stack_nullify) ();
     void (*weak_ref_stack_call_handlers) ();
 

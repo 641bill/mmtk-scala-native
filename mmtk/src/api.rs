@@ -295,7 +295,6 @@ pub enum SyncResponse {
 }
 
 // Define global channels
-// Define global channels
 lazy_static! {
     pub static ref REQ_SENDER: Mutex<mpsc::Sender<SyncRequest>> = {
         let (sender, _) = mpsc::channel();
@@ -330,9 +329,8 @@ pub extern "C" fn scalanative_gc_init(calls: *const ScalaNative_Upcalls) {
             for req in req_rx {
                 match req {
                     SyncRequest::Acquire(_tls, _mutator_visitor) => {
-                        let scan_mutators_in_safepoint = true;
                         let _guard = lock.lock().unwrap();
-                        unsafe { ((*UPCALLS).stop_all_mutators)(_tls, scan_mutators_in_safepoint, _mutator_visitor) };
+                        unsafe { ((*UPCALLS).stop_all_mutators)(_tls, _mutator_visitor) };
                         res_tx.send(SyncResponse::Acquired).unwrap();
                     }
                     SyncRequest::Release(tls) => {
@@ -360,7 +358,11 @@ pub unsafe extern "C" fn release_buffer(ptr: *mut Address, length: usize, capaci
 
 #[no_mangle]
 pub extern "C" fn invoke_mutator_closure(closure: *mut MutatorClosure, mutator: *mut Mutator<ScalaNative>) {
+    // println!("invoke_mutator_closure on mutator: {:p}", mutator);
     let closure = unsafe { &mut *closure };
+    // println!("closure: {:p}", closure);
+    // println!("closure.func: {:p}", closure.func);
+    // println!("closure.data: {:p}", closure.data.0);
     (closure.func)(mutator, &closure.data);
 }
 

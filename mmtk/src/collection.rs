@@ -67,7 +67,6 @@ impl Collection<ScalaNative> for VMCollection {
                             Box::into_raw(Box::new(GCThreadTLS::for_controller(ptr_controller)));
                         unsafe {
                              ((*UPCALLS).init_gc_worker_thread)(gc_thread_tls, send_ctx_ptr);
-                        
                         };
                         memory_manager::start_control_collector(
                             &SINGLETON,

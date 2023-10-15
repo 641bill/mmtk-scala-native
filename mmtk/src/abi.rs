@@ -2,7 +2,7 @@ use std::mem;
 
 use libc::size_t;
 use mmtk::util::{ObjectReference, Address, VMWorkerThread};
-use crate::{UPCALLS, ScalaNative};
+use crate::{UPCALLS, ScalaNative, object_scanning::LAST_FIELD_OFFSET};
 use mmtk::scheduler::{GCController, GCWorker};
 use crate::collection::{GC_THREAD_KIND_CONTROLLER, GC_THREAD_KIND_WORKER};
 
@@ -110,6 +110,13 @@ impl Object {
 		&*(self as *const _ as *const ArrayHeader)
 	}
 
+	pub fn get_fields(&self) -> *mut Field_t {
+		let fields = self as *const _ as usize + mem::size_of_val(&self.rtti);
+		#[cfg(feature = "uses_lockword")]
+		let fields = fields + mem::size_of_val(&self.lock_word);
+		fields as *mut Field_t
+	}
+
 	pub fn get_field_address(&self) -> Address {
     let base_size = mem::size_of::<*mut Rtti>() as usize;
 		#[cfg(feature = "uses_lockword")]
@@ -119,13 +126,15 @@ impl Object {
 	}
 
 	pub fn num_fields(&self) -> usize {
-		let fields_size = (unsafe { &*self.rtti }).size as usize - mem::size_of::<*mut Rtti>();
-		#[cfg(feature = "uses_lockword")]
-		let fields_size = fields_size - mem::size_of::<*mut word_t>();
-		// println!("Object address: {}, with size: {:x}, and fields_size: {:x}", Address::from_ref(self), (unsafe { &*self.rtti }).size, fields_size);
-		fields_size / mem::size_of::<Field_t>()
+		let ptr_map: *mut i64 = unsafe { (*(self.rtti)).ref_map_struct };
+		let mut i = 0;
+		unsafe { 
+			while *ptr_map.offset(i)  != LAST_FIELD_OFFSET {
+				i += 1;
+			}
+		}
+		i as usize
 	}
-
 }
 
 impl ArrayHeader {
@@ -234,4 +243,10 @@ impl GCThreadTLS {
 			assert!(self.kind == GC_THREAD_KIND_WORKER);
 			unsafe { &mut *(self.gc_context as *mut GCWorker<ScalaNative>) }
 	}
+}
+
+#[repr(C)]
+pub struct MutatorThreadNode {
+    pub value: *mut libc::c_void,
+    pub next: *mut MutatorThreadNode,
 }

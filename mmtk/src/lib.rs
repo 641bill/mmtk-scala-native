@@ -5,6 +5,7 @@ extern crate lazy_static;
 
 use abi::ArrayHeader;
 use abi::GCThreadTLS;
+use abi::MutatorThreadNode;
 use abi::Object;
 use abi::word_t;
 use binding::ScalaNativeBinding;
@@ -163,6 +164,15 @@ pub struct NodesClosure {
     pub data: *mut libc::c_void,
 }
 
+impl Clone for NodesClosure {
+    fn clone(&self) -> Self {
+        Self {
+            func: self.func,
+            data: self.data,
+        }
+    }
+}
+
 #[repr(C)]
 pub struct StackRange {
     stack_top: *mut *mut usize,
@@ -180,7 +190,6 @@ pub struct ScalaNative_Upcalls {
     // collection 
     pub stop_all_mutators: extern "C" fn(
         tls: VMWorkerThread,
-        scan_mutators_in_safepoint: bool,
         closure: MutatorClosure,
     ),
     pub resume_mutators: extern "C" fn(
@@ -207,14 +216,13 @@ pub struct ScalaNative_Upcalls {
     pub get_regs_range: extern "C" fn(tls: VMMutatorThread) -> RegsRange,
     pub get_modules: extern "C" fn() -> *mut word_t,
     pub get_modules_size: extern "C" fn() -> i32,
+    pub get_mutator_threads: extern "C" fn() -> *mut MutatorThreadNode,
     /// Scan all the mutators for roots.
     pub scan_roots_in_all_mutator_threads: extern "C" fn(closure: NodesClosure),
     /// Scan one mutator for roots.
     pub scan_roots_in_mutator_thread: extern "C" fn(closure: NodesClosure, tls: VMMutatorThread),
     pub scan_vm_specific_roots: extern "C" fn(closure: NodesClosure),
     pub prepare_for_roots_re_scanning: extern "C" fn(),
-    pub mmtk_obj_iterate: extern "C" fn(obj: *const Object, closure: *mut std::ffi::c_void),
-    pub mmtk_array_iterate: extern "C" fn(obj: *const ArrayHeader, closure: *mut std::ffi::c_void),
     pub weak_ref_stack_nullify: extern "C" fn(),
     pub weak_ref_stack_call_handlers: extern "C" fn(),
 

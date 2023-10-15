@@ -19,9 +19,13 @@ impl<'a> ScalaNativeMutatorIterator<'a> {
     fn new() -> Self {
         let mut mutators = VecDeque::new();
         unsafe {
+            // println!("number of mutators: {}", ((*UPCALLS).number_of_mutators)());
+            // print!("mutators: ");
             ((*UPCALLS).get_mutators)(MutatorClosure::from_rust_closure(&mut |mutator| {
+                // print!("{:p}, ", mutator);
                 mutators.push_back(mutator);
             }));
+            // println!();
         }
         Self {
             mutators,
@@ -54,6 +58,7 @@ impl ActivePlan<ScalaNative> for VMActivePlan {
     }
 
     fn mutator(_tls: VMMutatorThread) -> &'static mut Mutator<ScalaNative> {
+        println!("get mutator, tls = {:?}", _tls.0.0);
         unsafe {
             let m = ((*UPCALLS).get_mmtk_mutator)(_tls);
             &mut *m
@@ -63,5 +68,13 @@ impl ActivePlan<ScalaNative> for VMActivePlan {
     fn mutators<'a>() -> Box<dyn Iterator<Item = &'a mut Mutator<ScalaNative>> + 'a> {
         Box::new(ScalaNativeMutatorIterator::new())
     }
+
+    // fn vm_trace_object<Q: mmtk::ObjectQueue>(
+    //         _queue: &mut Q,
+    //         object: mmtk::util::ObjectReference,
+    //         _worker: &mut mmtk::scheduler::GCWorker<ScalaNative>,
+    //     ) -> mmtk::util::ObjectReference {
+        
+    // }
 
 }
