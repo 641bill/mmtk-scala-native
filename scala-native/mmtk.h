@@ -173,7 +173,7 @@ typedef struct {
 
     StackRange (*mmtk_get_stack_range) (void* thread);
     RegsRange (*mmtk_get_regs_range) (void* thread);
-    word_t* (*mmtk_get_modules)();
+    word_t** (*mmtk_get_modules)();
     int (*mmkt_get_modules_size)();
     MutatorThreadNode* (*mmtk_get_mutator_threads)();
 

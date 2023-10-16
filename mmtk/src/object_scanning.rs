@@ -223,11 +223,9 @@ impl ObjIterate for ArrayHeader {
 fn obj_iterate(obj: Obj, closure: &mut impl EdgeVisitor<ScalaNativeEdge>) {
 	match obj.is_array() {
 		true => {
-			println!("Scanning: Array: {:}", obj);
 			unsafe { obj.as_array_object().obj_iterate(closure) }
 		},
 		false => {
-			println!("Scanning: Object: {:}", obj);
 			obj.obj_iterate(closure)
 		},
 	}

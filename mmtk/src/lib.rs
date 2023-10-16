@@ -214,7 +214,7 @@ pub struct ScalaNative_Upcalls {
     // scanning
     pub get_stack_range: extern "C" fn(tls: VMMutatorThread) -> StackRange,
     pub get_regs_range: extern "C" fn(tls: VMMutatorThread) -> RegsRange,
-    pub get_modules: extern "C" fn() -> *mut word_t,
+    pub get_modules: extern "C" fn() -> *mut *mut word_t,
     pub get_modules_size: extern "C" fn() -> i32,
     pub get_mutator_threads: extern "C" fn() -> *mut MutatorThreadNode,
     /// Scan all the mutators for roots.
@@ -225,7 +225,7 @@ pub struct ScalaNative_Upcalls {
     pub prepare_for_roots_re_scanning: extern "C" fn(),
     pub weak_ref_stack_nullify: extern "C" fn(),
     pub weak_ref_stack_call_handlers: extern "C" fn(),
-
+ 
     // active_plan
     pub get_mutators: extern "C" fn(closure: MutatorClosure),
     pub is_mutator: extern "C" fn(tls: VMThread) -> bool,

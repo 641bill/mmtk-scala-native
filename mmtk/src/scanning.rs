@@ -38,7 +38,7 @@ use std::sync::Mutex;
 pub struct ObjectSendPtr(pub *mut Object);
 unsafe impl Send for ObjectSendPtr {}
 
-pub struct UsizeSendPtr(*mut usize);
+pub struct UsizeSendPtr(*mut *mut usize);
 unsafe impl Send for UsizeSendPtr {}
 
 lazy_static! {
@@ -99,8 +99,6 @@ extern "C" fn report_nodes_and_renew_buffer<F: RootsWorkFactory<ScalaNativeEdge>
         let address_buf = unsafe { Vec::<Address>::from_raw_parts(ptr, length, capacity) };
         let buf: Vec<ObjectReference> = address_buf.into_iter().map(|addr| ObjectReference::from_raw_address(addr)).collect();
         let factory: &mut F = unsafe { &mut *(factory_ptr as *mut F) };
-        // // Print out the buf
-        // println!("report_nodes_and_renew_buffer, buf: {:?}", buf);
         factory.create_process_pinning_roots_work(buf);
     }
     let (ptr, _, capacity) = {
@@ -181,7 +179,7 @@ pub(crate) fn is_ptr_aligned(address: *mut usize) -> bool {
     let address_num = address as usize;
     let mask = *(ALLOCATION_ALIGNMENT_INVERSE_MASK.lock().unwrap());
     let aligned = address_num & mask;
-    aligned == address_num
+    (aligned as *mut usize) == address
 }
 
 pub fn mmtk_mark_object(
@@ -196,7 +194,6 @@ pub fn mmtk_mark_object(
         }
 
         assert!((*object).size() != 0);
-        println!("Marking: Object {:}", *object);
         // Create the work packets here
         roots_closure.do_work(object);
     }
@@ -254,15 +251,15 @@ pub fn mmtk_mark_lock_words(
 pub unsafe fn mmtk_mark_modules(
     roots_closure: &mut RootsClosure,  
 ) {
-    // println!("mmtk_mark_modules");
-    let mut modules_ptr = (*(__modules.lock().unwrap()).0) as *mut _;
-    let modules: *mut *mut word_t = &mut modules_ptr;
+    let modules = (*(__modules.lock().unwrap())).0;
     let nb_modules = *(__modules_size.lock().unwrap());
 
     #[cfg(feature = "object_pinning")]
     let mut current_pinned_objects = Vec::new();
     for i in 0..nb_modules {
-        let object: *mut Object = *modules.offset(i as isize) as *mut Object;
+        let edge = modules.offset(i as isize);
+        let node = *edge;
+        let object = node as *mut Object;
         #[cfg(feature = "object_pinning")]
         {
             if mmtk_pin_object(addr) {
@@ -273,7 +270,6 @@ pub unsafe fn mmtk_mark_modules(
     }
     #[cfg(feature = "object_pinning")]
     mmtk_append_pinned_objects(current_pinned_objects.as_ptr(), current_pinned_objects.len());
-    // println!("mmtk_mark_modules done");
 }
 
 pub unsafe fn mmtk_mark_range(
@@ -310,17 +306,15 @@ pub unsafe fn mmtk_mark_range(
 pub unsafe fn mmtk_mark_program_stack(tls: VMMutatorThread, roots_closure: &mut RootsClosure) {
     let stack_range = ((*UPCALLS).get_stack_range)(tls);
     let regs_range = ((*UPCALLS).get_regs_range)(tls);
-    // println!("mmtk_mark_program_stack, stack_top: {:?}, stack_bottom: {:?}, regs: {:?}, regs_size: {:?}", stack_range.stack_top, stack_range.stack_bottom, regs_range.regs, regs_range.regs_size);
     mmtk_mark_range(stack_range.stack_top, 
         stack_range.stack_bottom, roots_closure);
     mmtk_mark_range(regs_range.regs, 
         regs_range.regs.add(regs_range.regs_size), roots_closure);
 }
 
-fn scan_roots_in_all_mutator_threads(_tls: VMWorkerThread, mut _factory: impl RootsWorkFactory<ScalaNativeEdge>) {
-    // println!("scan_roots_in_all_mutator_threads");
+fn scan_roots_in_all_mutator_threads<F: RootsWorkFactory<ScalaNativeEdge>>(_tls: VMWorkerThread, _factory: &mut F) {
     unsafe {
-        let nodes_closure = to_nodes_closure(&mut _factory);
+        let nodes_closure = to_nodes_closure(_factory);
         let mut roots_closure = RootsClosure::new(nodes_closure);
         let mut head = ((*UPCALLS).get_mutator_threads)();
         while !head.is_null() {
@@ -331,7 +325,6 @@ fn scan_roots_in_all_mutator_threads(_tls: VMWorkerThread, mut _factory: impl Ro
             head = node.next;
         }
     }
-    // println!("scan_roots_in_all_mutator_threads done");
 }
 
 impl Scanning<ScalaNative> for VMScanning {
@@ -351,11 +344,10 @@ impl Scanning<ScalaNative> for VMScanning {
     }
 
     fn scan_vm_specific_roots(_tls: VMWorkerThread, mut _factory: impl RootsWorkFactory<ScalaNativeEdge>) {
-        // println!("scan_vm_specific_roots");
         unsafe {
+            scan_roots_in_all_mutator_threads(_tls, &mut _factory);
             let nodes_closure = to_nodes_closure(&mut _factory);
-            let mut roots_closure = RootsClosure::new(nodes_closure.clone());
-            scan_roots_in_all_mutator_threads(_tls, _factory);
+            let mut roots_closure = RootsClosure::new(nodes_closure);
             mmtk_mark_modules(&mut roots_closure);
         }
     }
