@@ -51,9 +51,10 @@ pub extern "C" fn mmtk_get_bytes_in_page() -> usize {
     constants::BYTES_IN_PAGE
 }
 
+#[cfg(feature = "object_pinning")]
 #[no_mangle]
-pub extern "C" fn mmtk_pin_object(addr: * mut word_t) -> bool {
-    memory_manager::pin_object::<ScalaNative>(unsafe { ObjectReference::from_raw_address(Address::from_usize(addr as usize)) })
+pub extern "C" fn mmtk_pin_object(addr: *mut word_t) -> bool {
+    memory_manager::pin_object::<ScalaNative>(unsafe { ObjectReference::from_raw_address(Address::from_mut_ptr(addr)) })
 }
 
 #[no_mangle]

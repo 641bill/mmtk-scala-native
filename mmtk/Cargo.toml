@@ -23,12 +23,18 @@ log = "0.4"
 once_cell = "1.17.0"
 
 [features]
-default = ["is_mmtk_object", "scalanative_multithreading_enabled", "uses_lockword", "clear_old_copy"]
+default = [
+	"is_mmtk_object", 
+	"scalanative_multithreading_enabled", 
+	"uses_lockword", 
+	"clear_old_copy",
+	# "immix_non_moving",
+]
 is_mmtk_object = ["mmtk/is_mmtk_object"]
 malloc_counted_size = ["mmtk/malloc_counted_size"]
 malloc_mark_sweep = ["mmtk/malloc_mark_sweep"]
+immix_non_moving = ["mmtk/immix_non_moving"]
 nogc = []
 scalanative_multithreading_enabled = []
 uses_lockword = []
 clear_old_copy = []
-object_pinning = []

@@ -22,6 +22,7 @@ impl ScalaNativeBinding {
 		}
 	}
 
+	#[cfg(feature = "object_pinning")]
 	pub fn unpin_pinned_objects(&self) {
 		let mut pinned_objects = self
 				.pinned_objects

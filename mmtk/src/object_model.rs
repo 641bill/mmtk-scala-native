@@ -22,6 +22,7 @@ impl ObjectModel<ScalaNative> for VMObjectModel {
     const OBJECT_REF_OFFSET_LOWER_BOUND: isize = OBJECT_REF_OFFSET as isize;
     const NEED_VO_BITS_DURING_TRACING: bool = true;
 
+    #[cfg(feature = "object_pinning")]
     const LOCAL_PINNING_BIT_SPEC: VMLocalPinningBitSpec = VMLocalPinningBitSpec::side_after(Self::LOCAL_LOS_MARK_NURSERY_SPEC.as_spec());
    
     fn copy(
@@ -29,6 +30,8 @@ impl ObjectModel<ScalaNative> for VMObjectModel {
         semantics: CopySemantics,
         copy_context: &mut GCWorkerCopyContext<ScalaNative>,
     ) -> ObjectReference {
+        println!("Copying object from {}", from);
+        
         let bytes = Obj::from(from).size();
         let dst = copy_context.alloc_copy(from, bytes, unsafe { ((*UPCALLS).get_allocation_alignment)() }, 0, semantics);
         let src = from.to_raw_address();

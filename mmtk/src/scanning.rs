@@ -12,9 +12,14 @@ use crate::abi::field_alligned_lock_ref;
 #[cfg(feature = "uses_lockword")]
 use crate::abi::field_is_inflated_lock;
 use crate::abi::word_t;
+#[cfg(feature = "object_pinning")]
+use crate::api::mmtk_append_pinned_objects;
+#[cfg(feature = "object_pinning")]
+use crate::api:: mmtk_pin_object;
 use crate::api::release_buffer;
 use crate::edges::ScalaNativeEdge;
 use mmtk::MutatorContext;
+use mmtk::memory_manager;
 use mmtk::memory_manager::is_mmtk_object;
 use mmtk::memory_manager::last_heap_address;
 use mmtk::memory_manager::starting_heap_address;
@@ -262,14 +267,15 @@ pub unsafe fn mmtk_mark_modules(
         let object = node as *mut Object;
         #[cfg(feature = "object_pinning")]
         {
-            if mmtk_pin_object(addr) {
-                current_pinned_objects.push(addr);
+            let obj_ref = ObjectReference::from_raw_address(Address::from_mut_ptr(node));
+            if memory_manager::pin_object::<ScalaNative>(obj_ref) {
+                current_pinned_objects.push(obj_ref);
             }
         }
         mmtk_mark_field(object as Field_t, roots_closure)
     }
     #[cfg(feature = "object_pinning")]
-    mmtk_append_pinned_objects(current_pinned_objects.as_ptr(), current_pinned_objects.len());
+    crate::binding().pinned_objects.lock().unwrap().append(&mut current_pinned_objects);
 }
 
 pub unsafe fn mmtk_mark_range(
@@ -289,8 +295,9 @@ pub unsafe fn mmtk_mark_range(
         if is_word_in_heap(addr) && is_ptr_aligned(addr) {
             #[cfg(feature = "object_pinning")]
             {
-                if mmtk_pin_object(addr) {
-                    current_pinned_objects.push(addr);
+                let obj_ref = ObjectReference::from_raw_address(Address::from_mut_ptr(addr));
+                if memory_manager::pin_object::<ScalaNative>(obj_ref) {
+                    current_pinned_objects.push(obj_ref);
                 }
             }
             
@@ -300,7 +307,7 @@ pub unsafe fn mmtk_mark_range(
     }
     
     #[cfg(feature = "object_pinning")]
-    mmtk_append_pinned_objects(current_pinned_objects.as_ptr(), current_pinned_objects.len());
+    crate::binding().pinned_objects.lock().unwrap().append(&mut current_pinned_objects);
 }
 
 pub unsafe fn mmtk_mark_program_stack(tls: VMMutatorThread, roots_closure: &mut RootsClosure) {

@@ -86,15 +86,12 @@ impl Object {
 	}
 
 	pub fn size(&self) -> size_t {
-			if self.is_array() {
-				let array_header = unsafe {&*(self as *const _ as *const ArrayHeader) };
-				round_to_next_multiple(
-					mem::size_of::<ArrayHeader>() + (array_header.length as size_t) * (array_header.stride as size_t),
-					unsafe { ((*UPCALLS).get_allocation_alignment)() },
-			)
-			} else {
-					round_to_next_multiple((unsafe { &*self.rtti }).size as size_t, unsafe { ((*UPCALLS).get_allocation_alignment)() })
-			}
+		println!("Calculating size for object: {:}", self);
+		if self.is_array() {
+			unsafe { self.as_array_object().size() }
+		} else {
+				round_to_next_multiple((unsafe { &*self.rtti }).size as size_t, unsafe { ((*UPCALLS).get_allocation_alignment)() })
+		}
 	}
 
 	pub fn is_weak_reference(&self) -> bool {
@@ -138,6 +135,14 @@ impl Object {
 }
 
 impl ArrayHeader {
+	pub fn size(&self) -> size_t {
+		round_to_next_multiple(
+			mem::size_of::<ArrayHeader>() + 
+				self.length as size_t * self.stride as size_t,
+			unsafe { ((*UPCALLS).get_allocation_alignment)() },
+		)
+	}
+
 	pub fn get_element_address(&self, index: i32) -> Address {
 		let base_size = mem::size_of::<ArrayHeader>() as usize;
 		// println!("Array address: {}, with base size: {:x}", Address::from_ref(self), base_size);
