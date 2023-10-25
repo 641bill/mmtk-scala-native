@@ -103,7 +103,7 @@ pub static FREE_LIST_ALLOCATOR_SIZE: uintptr_t =
 
 #[repr(C)]
 pub struct NewBuffer {
-    pub ptr: *mut Address,
+    pub ptr: *mut *mut Object,
     pub capacity: usize,
 }
 
@@ -156,7 +156,7 @@ pub struct EdgesClosure {
 #[repr(C)]
 pub struct NodesClosure {
     pub func: extern "C" fn(
-        buf: *mut Address,
+        buf: *mut *mut Object,
         size: usize,
         cap: usize,
         data: *mut libc::c_void,

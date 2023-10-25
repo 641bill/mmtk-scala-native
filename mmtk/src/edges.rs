@@ -1,6 +1,5 @@
-use std::ops::Range;
-use mmtk::util::Address;
+use mmtk::vm::edge_shape::{UnimplementedMemorySlice, SimpleEdge};
 
-pub type ScalaNativeEdge = Address;
+pub type ScalaNativeEdge = SimpleEdge;
 
-pub type ScalaNativeMemorySlice = Range<ScalaNativeEdge>;
+pub type ScalaNativeMemorySlice = UnimplementedMemorySlice<SimpleEdge>;

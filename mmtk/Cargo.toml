@@ -27,7 +27,6 @@ default = [
 	"is_mmtk_object", 
 	"scalanative_multithreading_enabled", 
 	"uses_lockword", 
-	"clear_old_copy",
 	# "immix_non_moving",
 ]
 is_mmtk_object = ["mmtk/is_mmtk_object"]
@@ -37,4 +36,3 @@ immix_non_moving = ["mmtk/immix_non_moving"]
 nogc = []
 scalanative_multithreading_enabled = []
 uses_lockword = []
-clear_old_copy = []

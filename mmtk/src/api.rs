@@ -7,7 +7,10 @@ use log::debug;
 use log::warn;
 use mmtk::memory_manager::is_mmtk_object;
 use mmtk::util::constants;
+use mmtk::util::options::GCTriggerSelector;
+use mmtk::util::options::PlanSelector;
 use mmtk::vm::EdgeVisitor;
+use mmtk::vm::edge_shape::SimpleEdge;
 use core::panic;
 use std::sync::Mutex;
 use std::sync::atomic::Ordering;
@@ -26,7 +29,7 @@ use crate::SINGLETON;
 use crate::BUILDER;
 use crate::ScalaNative_Upcalls;
 use crate::UPCALLS;
-use crate::abi::word_t;
+use crate::abi::Object;
 use crate::binding::ScalaNativeBinding;
 use crate::edges::ScalaNativeEdge;
 use crate::object_scanning::ClosureWrapper;
@@ -36,7 +39,13 @@ pub extern "C" fn mmtk_init(min_heap_size: usize, max_heap_size: usize) {
     // set heap size first
     {
         let mut builder = BUILDER.lock().unwrap();
-        let success = builder.options.gc_trigger.set(mmtk::util::options::GCTriggerSelector::DynamicHeapSize(min_heap_size, max_heap_size));
+        let policy = if min_heap_size == max_heap_size {
+            GCTriggerSelector::FixedHeapSize(min_heap_size)
+        } else {
+            GCTriggerSelector::DynamicHeapSize(min_heap_size, max_heap_size)
+        };
+        builder.options.plan.set(PlanSelector::Immix);
+        let success = builder.options.gc_trigger.set(policy);
         assert!(success, "Failed to set min heap size to {} and max heap size to {}", min_heap_size, max_heap_size);
     }
 
@@ -57,6 +66,7 @@ pub extern "C" fn mmtk_pin_object(addr: *mut word_t) -> bool {
     memory_manager::pin_object::<ScalaNative>(unsafe { ObjectReference::from_raw_address(Address::from_mut_ptr(addr)) })
 }
 
+#[cfg(feature = "object_pinning")]
 #[no_mangle]
 pub extern "C" fn mmtk_append_pinned_objects(data: *const *const usize, len: size_t) {
     let mut vec = unsafe { 
@@ -352,9 +362,9 @@ pub extern "C" fn scalanative_gc_init(calls: *const ScalaNative_Upcalls) {
 /// # Safety
 /// Caller needs to make sure the ptr is a valid vector pointer.
 #[no_mangle]
-pub unsafe extern "C" fn release_buffer(ptr: *mut Address, length: usize, capacity: usize) {
+pub unsafe extern "C" fn release_buffer(ptr: *mut *mut Object, length: usize, capacity: usize) {
     // Take ownership and then drop it
-    let _vec = Vec::<Address>::from_raw_parts(ptr, length, capacity);
+    let _vec = Vec::<*mut Object>::from_raw_parts(ptr, length, capacity);
 }
 
 #[no_mangle]
@@ -370,10 +380,8 @@ pub extern "C" fn invoke_mutator_closure(closure: *mut MutatorClosure, mutator: 
 #[no_mangle]
 pub extern "C" fn visit_edge(closure_ptr: *mut std::ffi::c_void, edge: Address) {
     let closure = unsafe { &mut *(closure_ptr as *mut ClosureWrapper<ScalaNativeEdge>) };
-    if unsafe { !is_mmtk_object(edge.load::<Address>()) } {
-        println!("Edge: {} with content: {}, is not a valid edge, ", edge, unsafe { edge.load::<Address>() });
-        panic!("Propagating the panic");
-    } else {
-        closure.visit_edge(edge);
+    if is_mmtk_object(edge) {
+        let simple_edge = SimpleEdge::from_address(edge);
+        closure.visit_edge(simple_edge);
     }
 }

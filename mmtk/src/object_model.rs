@@ -1,9 +1,9 @@
-use log::trace;
+use log::{trace, info};
 use mmtk::util::copy::{CopySemantics, GCWorkerCopyContext};
 use mmtk::util::{Address, ObjectReference};
 use mmtk::vm::*;
 use crate::{ScalaNative, UPCALLS};
-use crate::abi::{Object, Obj};
+use crate::abi::Obj;
 
 pub struct VMObjectModel {}
 
@@ -13,9 +13,12 @@ pub const OBJECT_REF_OFFSET: usize = 0;
 
 impl ObjectModel<ScalaNative> for VMObjectModel {
     const GLOBAL_LOG_BIT_SPEC: VMGlobalLogBitSpec = VMGlobalLogBitSpec::side_first();
-    // const GLOBAL_FIELD_UNLOG_BIT_SPEC: VMGlobalFieldUnlogBitSpec = VMGlobalFieldUnlogBitSpec::in_header(0);
+    // The forwarding pointer can be anywhere in the from-space object because once the object is moved, 
+    // its from-space copy is "condemned", i.e. it's fields must not be read or written again, 
+    // and it will be "wrecked" (i.e. recycled) soon
     const LOCAL_FORWARDING_POINTER_SPEC: VMLocalForwardingPointerSpec = VMLocalForwardingPointerSpec::in_header(0);
-    const LOCAL_FORWARDING_BITS_SPEC: VMLocalForwardingBitsSpec = VMLocalForwardingBitsSpec::in_header(0);
+    // Use the last two bits in the object header
+    const LOCAL_FORWARDING_BITS_SPEC: VMLocalForwardingBitsSpec = VMLocalForwardingBitsSpec::in_header(-2);
     const LOCAL_MARK_BIT_SPEC: VMLocalMarkBitSpec = VMLocalMarkBitSpec::side_first();
     const LOCAL_LOS_MARK_NURSERY_SPEC: VMLocalLOSMarkNurserySpec = VMLocalLOSMarkNurserySpec::side_after(Self::LOCAL_MARK_BIT_SPEC.as_spec());
 
@@ -30,28 +33,12 @@ impl ObjectModel<ScalaNative> for VMObjectModel {
         semantics: CopySemantics,
         copy_context: &mut GCWorkerCopyContext<ScalaNative>,
     ) -> ObjectReference {
-        println!("Copying object from {}", from);
-        
         let bytes = Obj::from(from).size();
         let dst = copy_context.alloc_copy(from, bytes, unsafe { ((*UPCALLS).get_allocation_alignment)() }, 0, semantics);
         let src = from.to_raw_address();
         unsafe { std::ptr::copy_nonoverlapping::<u8>(src.to_ptr(), dst.to_mut_ptr(), bytes) }
         let to_obj = ObjectReference::from_raw_address(dst);
         copy_context.post_copy(to_obj, bytes, semantics);
-        trace!("Copied object from {} to {}", from, to_obj);
-        #[cfg(feature = "clear_old_copy")]
-        {
-            trace!(
-                "Clearing old copy {} ({}-{})",
-                from,
-                src,
-                src + bytes
-            );
-            // For debug purpose, we clear the old copy so that if the SN VM reads from the old
-            // copy again, it will likely result in an error.
-            unsafe { std::ptr::write_bytes::<u8>(src.to_mut_ptr(), 0, bytes) }
-        }
-
         to_obj
     }
 

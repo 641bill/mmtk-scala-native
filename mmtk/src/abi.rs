@@ -86,7 +86,6 @@ impl Object {
 	}
 
 	pub fn size(&self) -> size_t {
-		println!("Calculating size for object: {:}", self);
 		if self.is_array() {
 			unsafe { self.as_array_object().size() }
 		} else {
@@ -150,14 +149,22 @@ impl ArrayHeader {
 	}
 }
 
+// If the lowest bit is 1, the lock is inflated
 #[cfg(feature = "uses_lockword")]
 pub fn field_is_inflated_lock(field: Field_t) -> bool {
 	(field as word_t & monitor_inflation_mark_mask) != 0
 }
 
+// Set the lowest bit to 0
 #[cfg(feature = "uses_lockword")]
 pub fn field_alligned_lock_ref(field: Field_t) -> Field_t {
-	((field as word_t & monitor_inflation_mark_mask) as word_t) as Field_t
+	(field as word_t & monitor_object_mask) as Field_t
+}
+
+// Set the lowest bit to 1
+#[cfg(feature = "uses_lockword")]
+pub fn field_inflate_lock_ref(field: Field_t) -> Field_t {
+	(field as word_t | monitor_inflation_mark_mask) as Field_t
 }
 
 pub type Obj = &'static Object;

@@ -31,6 +31,7 @@ use mmtk::vm::EdgeVisitor;
 use mmtk::vm::RootsWorkFactory;
 use mmtk::vm::Scanning;
 use mmtk::Mutator;
+use mmtk::vm::edge_shape::SimpleEdge;
 use crate::UPCALLS;
 use lazy_static::lazy_static;
 
@@ -73,9 +74,10 @@ extern "C" fn report_edges_and_renew_buffer<F: RootsWorkFactory<ScalaNativeEdge>
     factory_ptr: *mut libc::c_void,
 ) -> NewBuffer {
     if !ptr.is_null() {
-        let buf = unsafe { Vec::<Address>::from_raw_parts(ptr, length, capacity) };
+        let address_buf = unsafe { Vec::<Address>::from_raw_parts(ptr, length, capacity) };
+        let simple_edge_buf: Vec<SimpleEdge> = address_buf.iter().map(|&addr| SimpleEdge::from_address(addr)).collect();
         let factory: &mut F = unsafe { &mut *(factory_ptr as *mut F) };
-        factory.create_process_edge_roots_work(buf);
+        factory.create_process_edge_roots_work(simple_edge_buf);
     }
     let (ptr, _, capacity) = {
         // TODO: Use Vec::into_raw_parts() when the method is available.
@@ -95,14 +97,14 @@ pub(crate) fn to_edges_closure<F: RootsWorkFactory<ScalaNativeEdge>>(factory: &m
 }
 
 extern "C" fn report_nodes_and_renew_buffer<F: RootsWorkFactory<ScalaNativeEdge>>(
-    ptr: *mut Address,
+    ptr: *mut *mut Object,
     length: usize,
     capacity: usize,
     factory_ptr: *mut libc::c_void,
 ) -> NewBuffer {
     if !ptr.is_null() {
-        let address_buf = unsafe { Vec::<Address>::from_raw_parts(ptr, length, capacity) };
-        let buf: Vec<ObjectReference> = address_buf.into_iter().map(|addr| ObjectReference::from_raw_address(addr)).collect();
+        let address_buf = unsafe { Vec::<*mut Object>::from_raw_parts(ptr, length, capacity) };
+        let buf: Vec<ObjectReference> = address_buf.into_iter().map(|addr| ObjectReference::from(unsafe { &*addr })).collect();
         let factory: &mut F = unsafe { &mut *(factory_ptr as *mut F) };
         factory.create_process_pinning_roots_work(buf);
     }
@@ -124,7 +126,7 @@ pub(crate) fn to_nodes_closure<F: RootsWorkFactory<ScalaNativeEdge>>(factory: &m
 
 #[repr(C)]
 pub struct RootsClosure {
-    buffer: *mut Address,
+    buffer: *mut *mut Object,
     cursor: usize,
     capacity: usize,
     nodes_closure: NodesClosure,
@@ -132,7 +134,7 @@ pub struct RootsClosure {
 
 impl RootsClosure {
     pub fn new(nodes_closure: NodesClosure) -> Self {
-        let buf = (nodes_closure.func)(null::<Address>() as *mut Address, 0, 0, nodes_closure.data);
+        let buf = (nodes_closure.func)(null::<*mut Object>() as *mut *mut Object, 0, 0, nodes_closure.data);
         Self {
             buffer: buf.ptr,
             cursor: 0,
@@ -143,7 +145,7 @@ impl RootsClosure {
 
     pub fn do_work(&mut self, p: *mut Object) {
         unsafe {
-            *self.buffer.offset(self.cursor as isize) = Address::from_mut_ptr(p);
+            *self.buffer.offset(self.cursor as isize) = p;
         }
         self.cursor += 1;
         if self.cursor >= self.capacity {
@@ -299,8 +301,7 @@ pub unsafe fn mmtk_mark_range(
                 if memory_manager::pin_object::<ScalaNative>(obj_ref) {
                     current_pinned_objects.push(obj_ref);
                 }
-            }
-            
+            } 
             mmtk_mark_conservative(addr, roots_closure);
         }
         current = current.offset(1);
@@ -359,12 +360,24 @@ impl Scanning<ScalaNative> for VMScanning {
         }
     }
 
+    fn support_edge_enqueuing(_tls: VMWorkerThread, _object: ObjectReference) -> bool {
+        false // Due to the scanning of lock words
+    }
+
     fn scan_object<EV: EdgeVisitor<ScalaNativeEdge>>(
         _tls: VMWorkerThread,
         _object: ObjectReference,
         _edge_visitor: &mut EV,
     ) {
         crate::object_scanning::scan_object(_tls, _object, _edge_visitor);
+    }
+
+    fn scan_object_and_trace_edges<OT: mmtk::vm::ObjectTracer>(
+            _tls: VMWorkerThread,
+            _object: ObjectReference,
+            _object_tracer: &mut OT,
+    ) {
+        crate::object_scanning::scan_object_and_trace_edges(_tls, _object, _object_tracer);
     }
 
     fn notify_initial_thread_scan_complete(_partial_scan: bool, _tls: VMWorkerThread) {
