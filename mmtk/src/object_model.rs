@@ -1,9 +1,8 @@
-use log::{trace, info};
 use mmtk::util::copy::{CopySemantics, GCWorkerCopyContext};
 use mmtk::util::{Address, ObjectReference};
 use mmtk::vm::*;
 use crate::scanning::ALLOCATION_ALIGNMENT_LAZY;
-use crate::{ScalaNative, UPCALLS};
+use crate::ScalaNative;
 use crate::abi::Obj;
 
 pub struct VMObjectModel {}
@@ -18,8 +17,9 @@ impl ObjectModel<ScalaNative> for VMObjectModel {
     // its from-space copy is "condemned", i.e. it's fields must not be read or written again, 
     // and it will be "wrecked" (i.e. recycled) soon
     const LOCAL_FORWARDING_POINTER_SPEC: VMLocalForwardingPointerSpec = VMLocalForwardingPointerSpec::in_header(0);
-    // Use the last two bits in the object header
-    const LOCAL_FORWARDING_BITS_SPEC: VMLocalForwardingBitsSpec = VMLocalForwardingBitsSpec::in_header(-2);
+    // Use the last two bits of rtti in the object header
+    // Mask rtti back when accessing it with forwarding bits
+    const LOCAL_FORWARDING_BITS_SPEC: VMLocalForwardingBitsSpec = VMLocalForwardingBitsSpec::in_header(0);
     const LOCAL_MARK_BIT_SPEC: VMLocalMarkBitSpec = VMLocalMarkBitSpec::side_first();
     const LOCAL_LOS_MARK_NURSERY_SPEC: VMLocalLOSMarkNurserySpec = VMLocalLOSMarkNurserySpec::side_after(Self::LOCAL_MARK_BIT_SPEC.as_spec());
     const OBJECT_REF_OFFSET_LOWER_BOUND: isize = OBJECT_REF_OFFSET as isize;
@@ -32,7 +32,7 @@ impl ObjectModel<ScalaNative> for VMObjectModel {
         semantics: CopySemantics,
         copy_context: &mut GCWorkerCopyContext<ScalaNative>,
     ) -> ObjectReference {
-        let bytes = Obj::from(from).size();
+        let bytes = Obj::from(from).size_for_copy();
         let dst = copy_context.alloc_copy(from, bytes, *ALLOCATION_ALIGNMENT_LAZY, 0, semantics);
         let src = from.to_raw_address();
         unsafe { std::ptr::copy_nonoverlapping::<u8>(src.to_ptr(), dst.to_mut_ptr(), bytes) }
@@ -47,6 +47,12 @@ impl ObjectModel<ScalaNative> for VMObjectModel {
         )
     }
 
+    fn get_reference_when_copied_to(_from: ObjectReference, _to: Address) -> ObjectReference {
+        unimplemented!(
+            "We don't support MarkCompact for Scala Native so this function cannot be called."
+        )
+    }
+
     fn get_current_size(_object: ObjectReference) -> usize {
         Obj::from(_object).size()
     }
@@ -56,17 +62,11 @@ impl ObjectModel<ScalaNative> for VMObjectModel {
     }
 
     fn get_align_when_copied(_object: ObjectReference) -> usize {
-        ::std::mem::size_of::<usize>()
+        *ALLOCATION_ALIGNMENT_LAZY
     }
 
     fn get_align_offset_when_copied(_object: ObjectReference) -> usize {
         0
-    }
-
-    fn get_reference_when_copied_to(_from: ObjectReference, _to: Address) -> ObjectReference {
-        unimplemented!(
-            "We don't support MarkCompact for Scala Native so this function cannot be called."
-        )
     }
 
     fn get_type_descriptor(_reference: ObjectReference) -> &'static [i8] {
@@ -74,7 +74,7 @@ impl ObjectModel<ScalaNative> for VMObjectModel {
     }
 
     fn ref_to_object_start(object: ObjectReference) -> Address {
-        object.to_raw_address().sub(OBJECT_REF_OFFSET)
+        object.to_raw_address()
     }
 
     fn ref_to_header(object: ObjectReference) -> Address {
@@ -82,12 +82,11 @@ impl ObjectModel<ScalaNative> for VMObjectModel {
     }
 
     fn ref_to_address(object: ObjectReference) -> Address {
-        // Just use object start.
-        Self::ref_to_object_start(object)
+        object.to_raw_address()
     }
 
     fn address_to_ref(addr: Address) -> ObjectReference {
-        ObjectReference::from_raw_address(addr.add(OBJECT_REF_OFFSET))
+        ObjectReference::from_raw_address(addr)
     }
 
     fn dump_object(_object: ObjectReference) {

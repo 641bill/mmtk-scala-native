@@ -1,6 +1,4 @@
-use std::panic;
 use std::ptr::null;
-
 use crate::EdgesClosure;
 use crate::NewBuffer;
 use crate::NodesClosure;
@@ -11,7 +9,6 @@ use crate::abi::Object;
 use crate::abi::field_alligned_lock_ref;
 #[cfg(feature = "uses_lockword")]
 use crate::abi::field_is_inflated_lock;
-use crate::abi::word_t;
 #[cfg(feature = "object_pinning")]
 use crate::api::mmtk_append_pinned_objects;
 #[cfg(feature = "object_pinning")]
@@ -19,12 +16,10 @@ use crate::api:: mmtk_pin_object;
 use crate::api::release_buffer;
 use crate::edges::ScalaNativeEdge;
 use mmtk::MutatorContext;
-use mmtk::memory_manager;
 use mmtk::memory_manager::is_mmtk_object;
 use mmtk::memory_manager::last_heap_address;
 use mmtk::memory_manager::starting_heap_address;
 use mmtk::util::Address;
-use mmtk::util::constants::BYTES_IN_WORD;
 use mmtk::util::opaque_pointer::*;
 use mmtk::util::ObjectReference;
 use mmtk::vm::EdgeVisitor;
@@ -58,10 +53,10 @@ lazy_static! {
     };
     pub static ref ALLOCATION_ALIGNMENT_INVERSE_MASK: usize = 
         !(*ALLOCATION_ALIGNMENT_LAZY - 1);
-    static ref __modules: Mutex<UsizeSendPtr> = Mutex::new(unsafe {
+    static ref __MODULES: Mutex<UsizeSendPtr> = Mutex::new(unsafe {
         UsizeSendPtr(((*UPCALLS).get_modules)())
     });
-    static ref __modules_size: i32 = unsafe {
+    static ref __MODULES_SIZE: i32 = unsafe {
         ((*UPCALLS).get_modules_size)()
     };
 }
@@ -188,6 +183,13 @@ pub(crate) fn is_ptr_aligned(address: *mut usize) -> bool {
     (aligned as *mut usize) == address
 }
 
+pub(crate) fn align_ptr(address: *mut usize) -> *mut usize {
+    let address_num = address as usize;
+    let mask = *(ALLOCATION_ALIGNMENT_INVERSE_MASK);
+    let aligned = address_num & mask;
+    aligned as *mut usize
+}
+
 pub fn mmtk_mark_object(
     object: *mut Object,
     roots_closure: &mut RootsClosure,
@@ -257,8 +259,8 @@ pub fn mmtk_mark_lock_words(
 pub unsafe fn mmtk_mark_modules(
     roots_closure: &mut RootsClosure,  
 ) {
-    let modules = (*(__modules.lock().unwrap())).0;
-    let nb_modules = *(__modules_size);
+    let modules = (*(__MODULES.lock().unwrap())).0;
+    let nb_modules = *(__MODULES_SIZE);
 
     #[cfg(feature = "object_pinning")]
     let mut current_pinned_objects = Vec::new();

@@ -1,15 +1,13 @@
-use std::{mem, fmt::Display, slice, sync::Mutex};
-use log::{info, trace};
+use std::{mem, fmt::Display, slice};
 use mmtk::memory_manager::is_mmtk_object;
 use mmtk::vm::edge_shape::SimpleEdge;
 use mmtk::{vm::{EdgeVisitor, edge_shape::Edge}, util::{ObjectReference, VMWorkerThread, Address}};
 use crate::{abi::*, edges::ScalaNativeEdge, UPCALLS};
 use crate::scanning::{is_word_in_heap, WEAK_REF_STACK, ObjectSendPtr};
-use std::panic::{self, AssertUnwindSafe};
 
 pub const LAST_FIELD_OFFSET: i64 = -1;
 lazy_static! {
-	static ref __object_array_id: i32 = unsafe {
+	static ref __OBJECT_ARRAY_ID: i32 = unsafe {
 		((*UPCALLS).get_object_array_id)()
 	};
 }
@@ -153,7 +151,6 @@ pub fn mmtk_scan_field_and_trace_edges(
 			// Create the work packets here
 			let edge_addr = Address::from_mut_ptr(edge);
 			edge_addr.store(traced);
-			trace!("Object {:p} is moved to {:p}, edge is {:p}, *edge is now {:p}", field, traced.value() as *mut usize, edge, *edge);
 		}
 	}
 }
@@ -161,19 +158,19 @@ pub fn mmtk_scan_field_and_trace_edges(
 #[inline]
 pub fn mmtk_scan_lock_words(
     object: *mut Object,
-    closure: &mut impl EdgeVisitor<ScalaNativeEdge>
+    _closure: &mut impl EdgeVisitor<ScalaNativeEdge>
 ) {
 	#[cfg(feature = "uses_lockword")] {
 		if !object.is_null() {
 			let rtti_lock: Field_t = unsafe { (*((*object).rtti)).rt.lock_word };
 			if field_is_inflated_lock(rtti_lock) {
-				let node = field_alligned_lock_ref(rtti_lock);
+				let _node = field_alligned_lock_ref(rtti_lock);
 				// todo
 			}
 
 			let object_lock: Field_t = unsafe { (*object).lock_word };
 			if field_is_inflated_lock(object_lock) {
-				let node = field_alligned_lock_ref(object_lock);
+				let _node = field_alligned_lock_ref(object_lock);
 				// todo
 			}
 		}
@@ -256,7 +253,7 @@ impl ObjIterate for Object {
 impl ObjIterate for ArrayHeader {
 	fn obj_iterate(&self, closure: &mut impl EdgeVisitor<ScalaNativeEdge>) {
 		unsafe {
-			if (*(self.rtti)).rt.id == *__object_array_id {
+			if (*(self.rtti)).rt.id == *__OBJECT_ARRAY_ID {
 				let length: usize = self.length.try_into().unwrap();
 				let fields: *mut *mut word_t = 
 					((self as *const _ as usize) + std::mem::size_of::<ArrayHeader>()) as *mut *mut word_t;
@@ -273,7 +270,7 @@ impl ObjIterate for ArrayHeader {
 
 	fn obj_iterate_and_trace_edges(&self, closure: &mut impl mmtk::vm::ObjectTracer) {
 		unsafe {
-			if (*(self.rtti)).rt.id == *__object_array_id {
+			if (*(self.rtti)).rt.id == *__OBJECT_ARRAY_ID {
 				let length: usize = self.length.try_into().unwrap();
 				let fields: *mut *mut word_t = 
 					((self as *const _ as usize) + std::mem::size_of::<ArrayHeader>()) as *mut *mut word_t;

@@ -1,12 +1,12 @@
-use std::{sync::Mutex, ptr::null_mut};
+use std::sync::Mutex;
 
-use mmtk::{MMTK, util::ObjectReference, memory_manager};
+use mmtk::{MMTK, util::ObjectReference};
 
-use crate::{ScalaNative, ScalaNative_Upcalls};
+use crate::{ScalaNative, ScalaNativeUpcalls};
 
 pub struct ScalaNativeBinding {
 	pub mmtk: &'static MMTK<ScalaNative>,
-	pub upcalls: *const ScalaNative_Upcalls,
+	pub upcalls: *const ScalaNativeUpcalls,
 	pub pinned_objects: Mutex<Vec<ObjectReference>>,
 }
 
@@ -14,7 +14,7 @@ unsafe impl Sync for ScalaNativeBinding {}
 unsafe impl Send for ScalaNativeBinding {}
 
 impl ScalaNativeBinding {
-	pub fn new(mmtk: &'static MMTK<ScalaNative>, upcalls: *const ScalaNative_Upcalls) -> Self {
+	pub fn new(mmtk: &'static MMTK<ScalaNative>, upcalls: *const ScalaNativeUpcalls) -> Self {
 		Self {
 			mmtk,
 			upcalls,

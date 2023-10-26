@@ -2,8 +2,6 @@ extern crate libc;
 extern crate mmtk;
 #[macro_use]
 extern crate lazy_static;
-
-use abi::ArrayHeader;
 use abi::GCThreadTLS;
 use abi::MutatorThreadNode;
 use abi::Object;
@@ -109,6 +107,7 @@ pub struct NewBuffer {
 
 use std::marker::PhantomData;
 
+#[repr(C)]
 pub struct SendPtr<T>(*mut T, PhantomData<T>);
 
 unsafe impl<T> Send for SendPtr<T> {}
@@ -186,7 +185,7 @@ pub struct RegsRange {
 }
 
 #[repr(C)]
-pub struct ScalaNative_Upcalls {
+pub struct ScalaNativeUpcalls {
     // collection 
     pub stop_all_mutators: extern "C" fn(
         tls: VMWorkerThread,
@@ -236,7 +235,7 @@ pub struct ScalaNative_Upcalls {
     pub init_synchronizer_thread: extern "C" fn(),
 }
 
-pub static mut UPCALLS: *const ScalaNative_Upcalls = null_mut();
+pub static mut UPCALLS: *const ScalaNativeUpcalls = null_mut();
 
 pub static GC_THREADS: OnceCell<Mutex<HashSet<ThreadId>>> = OnceCell::new();
 
@@ -250,7 +249,7 @@ pub(crate) fn unregister_gc_thread(thread_id: ThreadId) {
     gc_threads.remove(&thread_id);
 }
 
-pub(crate) fn is_gc_thread(thread_id: ThreadId) -> bool {
-    let gc_threads = GC_THREADS.get().unwrap().lock().unwrap();
-    gc_threads.contains(&thread_id)
-}
+// pub(crate) fn is_gc_thread(thread_id: ThreadId) -> bool {
+//     let gc_threads = GC_THREADS.get().unwrap().lock().unwrap();
+//     gc_threads.contains(&thread_id)
+// }

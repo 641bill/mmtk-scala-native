@@ -1,13 +1,11 @@
 use std::collections::VecDeque;
 use std::marker::PhantomData;
 
-use mmtk::Plan;
 use mmtk::vm::ActivePlan;
 use mmtk::util::opaque_pointer::*;
 use mmtk::Mutator;
 use crate::MutatorClosure;
 use crate::ScalaNative;
-use crate::SINGLETON;
 use crate::UPCALLS;
 
 struct ScalaNativeMutatorIterator<'a> {

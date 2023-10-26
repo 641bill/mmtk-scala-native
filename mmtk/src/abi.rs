@@ -1,35 +1,34 @@
 use std::mem;
-use std::sync::Mutex;
 
 use libc::size_t;
 use mmtk::util::{ObjectReference, Address, VMWorkerThread};
 use crate::{UPCALLS, ScalaNative, object_scanning::LAST_FIELD_OFFSET};
 use mmtk::scheduler::{GCController, GCWorker};
 use crate::collection::{GC_THREAD_KIND_CONTROLLER, GC_THREAD_KIND_WORKER};
-use crate::scanning::ALLOCATION_ALIGNMENT_LAZY;
+use crate::scanning::{ALLOCATION_ALIGNMENT_LAZY, is_ptr_aligned, align_ptr};
 
 #[cfg(feature = "scalanative_multithreading_enabled")]
-pub const monitor_inflation_mark_mask: word_t = 1;
+pub const MONITOR_INFLATION_MARK_MASK: word_t = 1;
 
 #[cfg(feature = "scalanative_multithreading_enabled")]
-pub const monitor_object_mask: word_t = !monitor_inflation_mark_mask;
+pub const MONITOR_OBJECT_MASK: word_t = !MONITOR_INFLATION_MARK_MASK;
 
 pub type word_t = usize;
 
 lazy_static! {
-	static ref array_ids_min: i32 = unsafe {
+	static ref ARRAY_IDS_MIN: i32 = unsafe {
 		((*UPCALLS).get_array_ids_min)()
 	};
-	static ref array_ids_max: i32 = unsafe {
+	static ref ARRAY_IDS_MAX: i32 = unsafe {
 		((*UPCALLS).get_array_ids_max)()
 	};
-	static ref weak_ref_ids_min: i32 = unsafe {
+	static ref WEAK_REF_IDS_MIN: i32 = unsafe {
 		((*UPCALLS).get_weak_ref_ids_min)()
 	};
-	static ref weak_ref_ids_max: i32 = unsafe {
+	static ref WEAK_REF_IDS_MAX: i32 = unsafe {
 		((*UPCALLS).get_weak_ref_ids_max)()
 	};
-	static ref weak_ref_field_offset: i32 = unsafe {
+	static ref WEAK_REF_FIELD_OFFSET: i32 = unsafe {
 		((*UPCALLS).get_weak_ref_field_offset)()
 	};
 }
@@ -101,8 +100,17 @@ pub fn round_to_next_multiple(value: size_t, multiple: size_t) -> size_t {
 
 impl Object {
 	pub fn is_array(&self) -> bool {
+		assert!(is_ptr_aligned(self.rtti as *mut usize), "rtti: {:b} not aligned", self.rtti as usize);
+		
 		let id = unsafe { (*self.rtti).rt.id };
-		*array_ids_min <= id && id <= *array_ids_max
+		*ARRAY_IDS_MIN <= id && id <= *ARRAY_IDS_MAX
+	}
+
+	pub fn is_array_for_copy(&self) -> bool {
+		let rtti = align_ptr(self.rtti as *mut usize) as *mut Rtti;
+		
+		let id = unsafe { (*rtti).rt.id };
+		*ARRAY_IDS_MIN <= id && id <= *ARRAY_IDS_MAX
 	}
 
 	pub fn size(&self) -> size_t {
@@ -113,15 +121,24 @@ impl Object {
 		}
 	}
 
+	pub fn size_for_copy(&self) -> size_t {
+		let rtti = align_ptr(self.rtti as *mut usize) as *mut Rtti;
+		if self.is_array_for_copy() {
+			unsafe { self.as_array_object().size() }
+		} else {
+			round_to_next_multiple((unsafe { &*rtti }).size as size_t, *ALLOCATION_ALIGNMENT_LAZY)
+		}
+	}
+
 	pub fn is_weak_reference(&self) -> bool {
 		unsafe {
-			*weak_ref_ids_min <= (&*self.rtti).rt.id &&
-			(&*self.rtti).rt.id <= *weak_ref_ids_max
+			*WEAK_REF_IDS_MIN <= (&*self.rtti).rt.id &&
+			(&*self.rtti).rt.id <= *WEAK_REF_IDS_MAX
 		}
 	}
 
 	pub fn is_referant_of_weak_reference(&self, field_offset: i32) -> bool {
-		self.is_weak_reference() && field_offset == *weak_ref_field_offset
+		self.is_weak_reference() && field_offset == *WEAK_REF_FIELD_OFFSET
 	}
 
 	pub unsafe fn as_array_object(&self) -> &ArrayHeader {
@@ -174,19 +191,19 @@ impl ArrayHeader {
 // If the lowest bit is 1, the lock is inflated
 #[cfg(feature = "uses_lockword")]
 pub fn field_is_inflated_lock(field: Field_t) -> bool {
-	(field as word_t & monitor_inflation_mark_mask) != 0
+	(field as word_t & MONITOR_INFLATION_MARK_MASK) != 0
 }
 
 // Set the lowest bit to 0
 #[cfg(feature = "uses_lockword")]
 pub fn field_alligned_lock_ref(field: Field_t) -> Field_t {
-	(field as word_t & monitor_object_mask) as Field_t
+	(field as word_t & MONITOR_OBJECT_MASK) as Field_t
 }
 
 // Set the lowest bit to 1
 #[cfg(feature = "uses_lockword")]
 pub fn field_inflate_lock_ref(field: Field_t) -> Field_t {
-	(field as word_t | monitor_inflation_mark_mask) as Field_t
+	(field as word_t | MONITOR_INFLATION_MARK_MASK) as Field_t
 }
 
 pub type Obj = &'static Object;

@@ -2,7 +2,6 @@
 #![allow(clippy::not_unsafe_ptr_arg_deref)]
 
 use libc::c_char;
-use libc::size_t;
 use log::debug;
 use log::warn;
 use mmtk::memory_manager::is_mmtk_object;
@@ -27,7 +26,7 @@ use crate::MutatorClosure;
 use crate::ScalaNative;
 use crate::SINGLETON;
 use crate::BUILDER;
-use crate::ScalaNative_Upcalls;
+use crate::ScalaNativeUpcalls;
 use crate::UPCALLS;
 use crate::abi::Object;
 use crate::binding::ScalaNativeBinding;
@@ -80,7 +79,7 @@ pub extern "C" fn mmtk_append_pinned_objects(data: *const *const usize, len: siz
 }
 
 #[no_mangle]
-pub extern "C" fn mmtk_init_binding(upcalls: *const ScalaNative_Upcalls) {
+pub extern "C" fn mmtk_init_binding(upcalls: *const ScalaNativeUpcalls) {
     let binding = ScalaNativeBinding::new(&SINGLETON, upcalls);
     crate::BINDING.set(binding).unwrap_or_else(|_| panic!("Binding already initialized"));
 }
@@ -313,7 +312,7 @@ lazy_static! {
 }
 
 #[no_mangle]
-pub extern "C" fn scalanative_gc_init(calls: *const ScalaNative_Upcalls) {
+pub extern "C" fn scalanative_gc_init(calls: *const ScalaNativeUpcalls) {
     unsafe { UPCALLS = calls };
     // Create channels for request and response
     let (req_tx, req_rx) = mpsc::channel::<SyncRequest>();
