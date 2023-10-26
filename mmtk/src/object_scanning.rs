@@ -9,9 +9,9 @@ use std::panic::{self, AssertUnwindSafe};
 
 pub const LAST_FIELD_OFFSET: i64 = -1;
 lazy_static! {
-	static ref __object_array_id: Mutex<i32> = Mutex::new(unsafe {
+	static ref __object_array_id: i32 = unsafe {
 		((*UPCALLS).get_object_array_id)()
-	});
+	};
 }
 trait ObjIterate: Sized {
 	fn obj_iterate(&self, closure: &mut impl EdgeVisitor<ScalaNativeEdge>);
@@ -256,7 +256,7 @@ impl ObjIterate for Object {
 impl ObjIterate for ArrayHeader {
 	fn obj_iterate(&self, closure: &mut impl EdgeVisitor<ScalaNativeEdge>) {
 		unsafe {
-			if (*(self.rtti)).rt.id == *__object_array_id.lock().unwrap() {
+			if (*(self.rtti)).rt.id == *__object_array_id {
 				let length: usize = self.length.try_into().unwrap();
 				let fields: *mut *mut word_t = 
 					((self as *const _ as usize) + std::mem::size_of::<ArrayHeader>()) as *mut *mut word_t;
@@ -273,7 +273,7 @@ impl ObjIterate for ArrayHeader {
 
 	fn obj_iterate_and_trace_edges(&self, closure: &mut impl mmtk::vm::ObjectTracer) {
 		unsafe {
-			if (*(self.rtti)).rt.id == *__object_array_id.lock().unwrap() {
+			if (*(self.rtti)).rt.id == *__object_array_id {
 				let length: usize = self.length.try_into().unwrap();
 				let fields: *mut *mut word_t = 
 					((self as *const _ as usize) + std::mem::size_of::<ArrayHeader>()) as *mut *mut word_t;

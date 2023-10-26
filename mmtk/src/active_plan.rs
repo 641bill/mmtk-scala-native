@@ -45,10 +45,6 @@ impl<'a> Iterator for ScalaNativeMutatorIterator<'a> {
 pub struct VMActivePlan<> {}
 
 impl ActivePlan<ScalaNative> for VMActivePlan {
-    fn global() -> &'static dyn Plan<VM=ScalaNative> {
-        SINGLETON.get_plan()
-    }
-
     fn number_of_mutators() -> usize {
         unsafe { ((*UPCALLS).number_of_mutators)() }
     }

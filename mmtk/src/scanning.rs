@@ -53,18 +53,17 @@ lazy_static! {
 }
 
 lazy_static! {
-    static ref ALLOCATION_ALIGNMENT_LAZY: Mutex<usize> = Mutex::new(unsafe {
+    pub static ref ALLOCATION_ALIGNMENT_LAZY: usize = unsafe {
         ((*UPCALLS).get_allocation_alignment)()
-    });
-    pub static ref ALLOCATION_ALIGNMENT_INVERSE_MASK: Mutex<usize> = Mutex::new(
-        !(*ALLOCATION_ALIGNMENT_LAZY.lock().unwrap() - 1)
-    );
+    };
+    pub static ref ALLOCATION_ALIGNMENT_INVERSE_MASK: usize = 
+        !(*ALLOCATION_ALIGNMENT_LAZY - 1);
     static ref __modules: Mutex<UsizeSendPtr> = Mutex::new(unsafe {
         UsizeSendPtr(((*UPCALLS).get_modules)())
     });
-    static ref __modules_size: Mutex<i32> = Mutex::new(unsafe {
+    static ref __modules_size: i32 = unsafe {
         ((*UPCALLS).get_modules_size)()
-    });
+    };
 }
 
 extern "C" fn report_edges_and_renew_buffer<F: RootsWorkFactory<ScalaNativeEdge>>(
@@ -184,7 +183,7 @@ pub(crate) fn is_word_in_heap(address: *mut usize) -> bool {
 
 pub(crate) fn is_ptr_aligned(address: *mut usize) -> bool {
     let address_num = address as usize;
-    let mask = *(ALLOCATION_ALIGNMENT_INVERSE_MASK.lock().unwrap());
+    let mask = *(ALLOCATION_ALIGNMENT_INVERSE_MASK);
     let aligned = address_num & mask;
     (aligned as *mut usize) == address
 }
@@ -224,7 +223,7 @@ pub fn mmtk_mark_conservative(
     roots_closure: &mut RootsClosure,
 ) {
     assert!(is_word_in_heap(address));
-    let mask = *(ALLOCATION_ALIGNMENT_INVERSE_MASK).lock().unwrap();
+    let mask = *(ALLOCATION_ALIGNMENT_INVERSE_MASK);
     let object = ((address as usize) & mask) as *mut usize as *mut Object;
     let object_addr = Address::from_mut_ptr(object);
     if !object.is_null() {
@@ -259,7 +258,7 @@ pub unsafe fn mmtk_mark_modules(
     roots_closure: &mut RootsClosure,  
 ) {
     let modules = (*(__modules.lock().unwrap())).0;
-    let nb_modules = *(__modules_size.lock().unwrap());
+    let nb_modules = *(__modules_size);
 
     #[cfg(feature = "object_pinning")]
     let mut current_pinned_objects = Vec::new();

@@ -1,10 +1,12 @@
 use std::mem;
+use std::sync::Mutex;
 
 use libc::size_t;
 use mmtk::util::{ObjectReference, Address, VMWorkerThread};
 use crate::{UPCALLS, ScalaNative, object_scanning::LAST_FIELD_OFFSET};
 use mmtk::scheduler::{GCController, GCWorker};
 use crate::collection::{GC_THREAD_KIND_CONTROLLER, GC_THREAD_KIND_WORKER};
+use crate::scanning::ALLOCATION_ALIGNMENT_LAZY;
 
 #[cfg(feature = "scalanative_multithreading_enabled")]
 pub const monitor_inflation_mark_mask: word_t = 1;
@@ -13,6 +15,24 @@ pub const monitor_inflation_mark_mask: word_t = 1;
 pub const monitor_object_mask: word_t = !monitor_inflation_mark_mask;
 
 pub type word_t = usize;
+
+lazy_static! {
+	static ref array_ids_min: i32 = unsafe {
+		((*UPCALLS).get_array_ids_min)()
+	};
+	static ref array_ids_max: i32 = unsafe {
+		((*UPCALLS).get_array_ids_max)()
+	};
+	static ref weak_ref_ids_min: i32 = unsafe {
+		((*UPCALLS).get_weak_ref_ids_min)()
+	};
+	static ref weak_ref_ids_max: i32 = unsafe {
+		((*UPCALLS).get_weak_ref_ids_max)()
+	};
+	static ref weak_ref_field_offset: i32 = unsafe {
+		((*UPCALLS).get_weak_ref_field_offset)()
+	};
+}
 
 #[repr(C)]
 pub struct Runtime {
@@ -82,24 +102,26 @@ pub fn round_to_next_multiple(value: size_t, multiple: size_t) -> size_t {
 impl Object {
 	pub fn is_array(&self) -> bool {
 		let id = unsafe { (*self.rtti).rt.id };
-		unsafe { ((*UPCALLS).get_array_ids_min)() <= id && id <= ((*UPCALLS).get_array_ids_max)() }
+		*array_ids_min <= id && id <= *array_ids_max
 	}
 
 	pub fn size(&self) -> size_t {
 		if self.is_array() {
 			unsafe { self.as_array_object().size() }
 		} else {
-				round_to_next_multiple((unsafe { &*self.rtti }).size as size_t, unsafe { ((*UPCALLS).get_allocation_alignment)() })
+				round_to_next_multiple((unsafe { &*self.rtti }).size as size_t, *ALLOCATION_ALIGNMENT_LAZY)
 		}
 	}
 
 	pub fn is_weak_reference(&self) -> bool {
-		(unsafe { ((*UPCALLS).get_weak_ref_ids_min)() } <= unsafe { &*self.rtti }.rt.id) &&
-		(unsafe { &*self.rtti }.rt.id <= unsafe { ((*UPCALLS).get_weak_ref_ids_max)() })
+		unsafe {
+			*weak_ref_ids_min <= (&*self.rtti).rt.id &&
+			(&*self.rtti).rt.id <= *weak_ref_ids_max
+		}
 	}
 
 	pub fn is_referant_of_weak_reference(&self, field_offset: i32) -> bool {
-		self.is_weak_reference() && field_offset == unsafe { ((*UPCALLS).get_weak_ref_field_offset)() }
+		self.is_weak_reference() && field_offset == *weak_ref_field_offset
 	}
 
 	pub unsafe fn as_array_object(&self) -> &ArrayHeader {
@@ -138,7 +160,7 @@ impl ArrayHeader {
 		round_to_next_multiple(
 			mem::size_of::<ArrayHeader>() + 
 				self.length as size_t * self.stride as size_t,
-			unsafe { ((*UPCALLS).get_allocation_alignment)() },
+				*ALLOCATION_ALIGNMENT_LAZY,
 		)
 	}
 

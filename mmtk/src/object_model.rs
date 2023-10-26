@@ -2,6 +2,7 @@ use log::{trace, info};
 use mmtk::util::copy::{CopySemantics, GCWorkerCopyContext};
 use mmtk::util::{Address, ObjectReference};
 use mmtk::vm::*;
+use crate::scanning::ALLOCATION_ALIGNMENT_LAZY;
 use crate::{ScalaNative, UPCALLS};
 use crate::abi::Obj;
 
@@ -21,10 +22,8 @@ impl ObjectModel<ScalaNative> for VMObjectModel {
     const LOCAL_FORWARDING_BITS_SPEC: VMLocalForwardingBitsSpec = VMLocalForwardingBitsSpec::in_header(-2);
     const LOCAL_MARK_BIT_SPEC: VMLocalMarkBitSpec = VMLocalMarkBitSpec::side_first();
     const LOCAL_LOS_MARK_NURSERY_SPEC: VMLocalLOSMarkNurserySpec = VMLocalLOSMarkNurserySpec::side_after(Self::LOCAL_MARK_BIT_SPEC.as_spec());
-
     const OBJECT_REF_OFFSET_LOWER_BOUND: isize = OBJECT_REF_OFFSET as isize;
     const NEED_VO_BITS_DURING_TRACING: bool = true;
-
     #[cfg(feature = "object_pinning")]
     const LOCAL_PINNING_BIT_SPEC: VMLocalPinningBitSpec = VMLocalPinningBitSpec::side_after(Self::LOCAL_LOS_MARK_NURSERY_SPEC.as_spec());
    
@@ -34,7 +33,7 @@ impl ObjectModel<ScalaNative> for VMObjectModel {
         copy_context: &mut GCWorkerCopyContext<ScalaNative>,
     ) -> ObjectReference {
         let bytes = Obj::from(from).size();
-        let dst = copy_context.alloc_copy(from, bytes, unsafe { ((*UPCALLS).get_allocation_alignment)() }, 0, semantics);
+        let dst = copy_context.alloc_copy(from, bytes, *ALLOCATION_ALIGNMENT_LAZY, 0, semantics);
         let src = from.to_raw_address();
         unsafe { std::ptr::copy_nonoverlapping::<u8>(src.to_ptr(), dst.to_mut_ptr(), bytes) }
         let to_obj = ObjectReference::from_raw_address(dst);
