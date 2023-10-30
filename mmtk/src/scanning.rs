@@ -1,3 +1,4 @@
+use std::collections::HashSet;
 use std::ptr::null;
 use crate::EdgesClosure;
 use crate::NewBuffer;
@@ -97,7 +98,9 @@ extern "C" fn report_nodes_and_renew_buffer<F: RootsWorkFactory<ScalaNativeEdge>
     factory_ptr: *mut libc::c_void,
 ) -> NewBuffer {
     if !ptr.is_null() {
-        let address_buf = unsafe { Vec::<*mut Object>::from_raw_parts(ptr, length, capacity) };
+        let mut address_buf = unsafe { Vec::<*mut Object>::from_raw_parts(ptr, length, capacity) };
+        let address_set: HashSet<_> = address_buf.drain(..).collect();
+        address_buf.extend(address_set.into_iter());
         let buf: Vec<ObjectReference> = address_buf.into_iter().map(|addr| ObjectReference::from(unsafe { &*addr })).collect();
         let factory: &mut F = unsafe { &mut *(factory_ptr as *mut F) };
         factory.create_process_pinning_roots_work(buf);

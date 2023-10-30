@@ -197,6 +197,10 @@ typedef struct {
 extern void scalanative_gc_init(ScalaNative_Upcalls *calls);
 extern void mmtk_init_binding(const ScalaNative_Upcalls *upcalls);
 
+extern size_t get_immix_bump_ptr_offset();
+extern size_t get_vo_bit_log_region_size();
+extern size_t get_vo_bit_base();
+
 #ifdef __cplusplus
 }
 #endif

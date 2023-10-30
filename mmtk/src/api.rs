@@ -5,6 +5,8 @@ use libc::c_char;
 use log::debug;
 use log::warn;
 use mmtk::memory_manager::is_mmtk_object;
+use mmtk::util::alloc::AllocatorInfo;
+use mmtk::util::alloc::AllocatorSelector;
 use mmtk::util::constants;
 use mmtk::util::options::GCTriggerSelector;
 use mmtk::util::options::PlanSelector;
@@ -104,10 +106,7 @@ pub extern "C" fn mmtk_flush_mutator(mutator: *mut Mutator<ScalaNative>) {
 
 #[no_mangle]
 pub extern "C" fn mmtk_alloc(mutator: *mut Mutator<ScalaNative>, size: usize,
-                    align: usize, offset: usize, mut semantics: AllocationSemantics) -> Address {
-    if size >= SINGLETON.get_plan().constraints().max_non_los_default_alloc_bytes {
-        semantics = AllocationSemantics::Los;
-    }
+                    align: usize, offset: usize, semantics: AllocationSemantics) -> Address {
     memory_manager::alloc::<ScalaNative>(unsafe { &mut *mutator }, size, align, offset, semantics)
 }
 
@@ -378,4 +377,25 @@ pub extern "C" fn visit_edge(closure_ptr: *mut std::ffi::c_void, edge: Address) 
         let simple_edge = SimpleEdge::from_address(edge);
         closure.visit_edge(simple_edge);
     }
+}
+
+#[no_mangle]
+pub extern "C" fn get_immix_bump_ptr_offset() -> usize {
+    let AllocatorInfo::BumpPointer {
+        bump_pointer_offset,
+    } = AllocatorInfo::new::<ScalaNative>(AllocatorSelector::Immix(0)) else {
+        panic!("Expected BumpPointer");
+    };
+    bump_pointer_offset
+}
+
+#[no_mangle]
+pub extern "C" fn get_vo_bit_log_region_size() -> usize {
+    // TODO: Fix mmtk-core to make the log region size public
+    mmtk::util::is_mmtk_object::VO_BIT_REGION_SIZE.trailing_zeros() as usize
+}
+
+#[no_mangle]
+pub extern "C" fn get_vo_bit_base() -> usize {
+    mmtk::util::metadata::side_metadata::VO_BIT_SIDE_METADATA_ADDR.as_usize()
 }
