@@ -114,14 +114,14 @@ pub fn mmtk_scan_field(
 		unsafe {
 			let object = field as *mut Object;
 			let simple_edge = SimpleEdge::from_address(Address::from_mut_ptr(edge));
-			assert!(is_mmtk_object(node_addr));
-			assert!(!(*object).rtti.is_null());
+			debug_assert!(is_mmtk_object(node_addr));
+			debug_assert!(!(*object).rtti.is_null());
 			mmtk_scan_lock_words(object, closure);
 			if (*object).is_weak_reference() {
 					WEAK_REF_STACK.lock().unwrap().push(ObjectSendPtr(object));
 			}
 
-			assert!((*object).size() != 0);
+			debug_assert!((*object).size() != 0);
 			// Create the work packets here
 			closure.visit_edge(simple_edge);
 		}
@@ -140,14 +140,14 @@ pub fn mmtk_scan_field_and_trace_edges(
 			let traced = closure.trace_object(ObjectReference::from_raw_address(field_addr));
 			let field_addr = Address::from_mut_ptr(traced.value() as *mut usize);
 			let object = traced.value() as *mut Object;
-			assert!(is_mmtk_object(field_addr));
-			assert!(!(*object).rtti.is_null(), "{:p}'s rtti is null: {:p}, lock_word: {:p}", object, (*object).rtti, (*object).lock_word);
+			debug_assert!(is_mmtk_object(field_addr));
+			debug_assert!(!(*object).rtti.is_null(), "{:p}'s rtti is null: {:p}, lock_word: {:p}", object, (*object).rtti, (*object).lock_word);
 			mmtk_scan_lock_words_and_trace_edges(object, closure);
 			if (*object).is_weak_reference() {
 					WEAK_REF_STACK.lock().unwrap().push(ObjectSendPtr(object));
 			}
 
-			assert!((*object).size() != 0, "{:p}'s size is 0", object);
+			debug_assert!((*object).size() != 0, "{:p}'s size is 0", object);
 			// Create the work packets here
 			let edge_addr = Address::from_mut_ptr(edge);
 			edge_addr.store(traced);

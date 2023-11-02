@@ -198,13 +198,13 @@ pub fn mmtk_mark_object(
     roots_closure: &mut RootsClosure,
 ) {
     unsafe {
-        assert!(!(*object).rtti.is_null());
+        debug_assert!(!(*object).rtti.is_null());
         mmtk_mark_lock_words(object, roots_closure);
         if (*object).is_weak_reference() {
             WEAK_REF_STACK.lock().unwrap().push(ObjectSendPtr(object));
         }
 
-        assert!((*object).size() != 0);
+        debug_assert!((*object).size() != 0);
         // Create the work packets here
         roots_closure.do_work(object);
     }
@@ -227,7 +227,7 @@ pub fn mmtk_mark_conservative(
     address: *mut usize,
     roots_closure: &mut RootsClosure,
 ) {
-    assert!(is_word_in_heap(address));
+    debug_assert!(is_word_in_heap(address));
     let mask = *(ALLOCATION_ALIGNMENT_INVERSE_MASK);
     let object = ((address as usize) & mask) as *mut usize as *mut Object;
     let object_addr = Address::from_mut_ptr(object);
@@ -289,8 +289,8 @@ pub unsafe fn mmtk_mark_range(
     to: *mut *mut usize,
     roots_closure: &mut RootsClosure,
 ) {
-    assert!(!from.is_null());
-    assert!(!to.is_null());
+    debug_assert!(!from.is_null());
+    debug_assert!(!to.is_null());
     
     #[cfg(feature = "object_pinning")]
     let mut current_pinned_objects = Vec::new();

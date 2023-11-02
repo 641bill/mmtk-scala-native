@@ -47,11 +47,11 @@ pub extern "C" fn mmtk_init(min_heap_size: usize, max_heap_size: usize) {
         };
         builder.options.plan.set(PlanSelector::Immix);
         let success = builder.options.gc_trigger.set(policy);
-        assert!(success, "Failed to set min heap size to {} and max heap size to {}", min_heap_size, max_heap_size);
+        debug_assert!(success, "Failed to set min heap size to {} and max heap size to {}", min_heap_size, max_heap_size);
     }
 
     // Make sure MMTk has not yet been initialized
-    assert!(!crate::MMTK_INITIALIZED.load(Ordering::SeqCst));
+    debug_assert!(!crate::MMTK_INITIALIZED.load(Ordering::SeqCst));
     // Initialize MMTk here
     lazy_static::initialize(&SINGLETON);
 }

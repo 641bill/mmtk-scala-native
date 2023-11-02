@@ -100,7 +100,7 @@ pub fn round_to_next_multiple(value: size_t, multiple: size_t) -> size_t {
 
 impl Object {
 	pub fn is_array(&self) -> bool {
-		assert!(is_ptr_aligned(self.rtti as *mut usize), "rtti: {:b} not aligned", self.rtti as usize);
+		debug_assert!(is_ptr_aligned(self.rtti as *mut usize), "rtti: {:b} not aligned", self.rtti as usize);
 		
 		let id = unsafe { (*self.rtti).rt.id };
 		*ARRAY_IDS_MIN <= id && id <= *ARRAY_IDS_MAX
@@ -254,7 +254,7 @@ impl GCThreadTLS {
 	///
 	/// Has undefined behavior if `ptr` is invalid.
 	pub unsafe fn check_cast(ptr: *mut GCThreadTLS) -> &'static mut GCThreadTLS {
-			assert!(!ptr.is_null());
+		debug_assert!(!ptr.is_null());
 			let result = &mut *ptr;
 			debug_assert!({
 					let kind = result.kind;
@@ -291,7 +291,7 @@ impl GCThreadTLS {
 
 	pub fn worker<'w>(&mut self) -> &'w mut GCWorker<ScalaNative> {
 			// NOTE: The returned ref points to the worker which does not have the same lifetime as self.
-			assert!(self.kind == GC_THREAD_KIND_WORKER);
+			debug_assert!(self.kind == GC_THREAD_KIND_WORKER);
 			unsafe { &mut *(self.gc_context as *mut GCWorker<ScalaNative>) }
 	}
 }
