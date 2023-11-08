@@ -1,11 +1,15 @@
 use std::collections::HashSet;
 use std::ptr::null;
+use std::ptr::null_mut;
+use std::sync::atomic::AtomicBool;
 use crate::EdgesClosure;
 use crate::NewBuffer;
 use crate::NodesClosure;
 use crate::ScalaNative;
 use crate::abi::Field_t;
+use crate::abi::Obj;
 use crate::abi::Object;
+use crate::abi::WEAK_REF_FIELD_OFFSET;
 #[cfg(feature = "uses_lockword")]
 use crate::abi::field_alligned_lock_ref;
 #[cfg(feature = "uses_lockword")]
@@ -16,6 +20,8 @@ use crate::api::mmtk_append_pinned_objects;
 use crate::api:: mmtk_pin_object;
 use crate::api::release_buffer;
 use crate::edges::ScalaNativeEdge;
+use atomic::Ordering;
+use log::debug;
 use mmtk::MutatorContext;
 use mmtk::memory_manager::is_mmtk_object;
 use mmtk::memory_manager::last_heap_address;
@@ -37,6 +43,7 @@ const WORK_PACKET_CAPACITY: usize = 4096;
 
 use std::sync::Mutex;
 
+#[repr(C)]
 pub struct ObjectSendPtr(pub *mut Object);
 unsafe impl Send for ObjectSendPtr {}
 
@@ -44,7 +51,6 @@ pub struct UsizeSendPtr(*mut *mut usize);
 unsafe impl Send for UsizeSendPtr {}
 
 lazy_static! {
-    pub static ref STACK: Mutex<Vec<ObjectSendPtr>> = Mutex::new(Vec::new());
     pub static ref WEAK_REF_STACK: Mutex<Vec<ObjectSendPtr>> = Mutex::new(Vec::new());
 }
 
@@ -61,6 +67,9 @@ lazy_static! {
         ((*UPCALLS).get_modules_size)()
     };
 }
+
+pub static VISITED: AtomicBool = AtomicBool::new(false);
+pub static HANDLER_FN: Mutex<Option<fn()>> = Mutex::new(None);
 
 extern "C" fn report_edges_and_renew_buffer<F: RootsWorkFactory<ScalaNativeEdge>>(
     ptr: *mut Address,
@@ -339,6 +348,45 @@ fn scan_roots_in_all_mutator_threads<F: RootsWorkFactory<ScalaNativeEdge>>(_tls:
     }
 }
 
+fn weak_ref_stack_is_empty() -> bool {
+    let weak_refs = WEAK_REF_STACK.lock().unwrap();
+    weak_refs.is_empty()
+}
+
+fn weak_ref_stack_pop() -> Option<ObjectSendPtr> {
+    let mut weak_refs = WEAK_REF_STACK.lock().unwrap();
+    weak_refs.pop()
+}
+
+pub fn mmtk_weak_ref_stack_nullify(closure: &mut impl mmtk::vm::ObjectTracer) {
+    VISITED.store(false, Ordering::SeqCst);
+    while !weak_ref_stack_is_empty() {
+        let weak_ref = weak_ref_stack_pop().unwrap();
+        let object = weak_ref.0;
+        let field_offset = *WEAK_REF_FIELD_OFFSET;
+        if is_word_in_heap(object as *mut usize) {
+            let object_ref = ObjectReference::from_raw_address(Address::from_mut_ptr(object));
+            if !object_ref.is_reachable() {
+                let traced = closure.trace_object(object_ref);
+                let traced_obj = Obj::from(traced);
+		        let fields = traced_obj.get_fields();
+				let edge = unsafe { fields.offset(field_offset as isize) };
+                let edge_addr = Address::from_mut_ptr(edge);
+                let null_ptr: *mut usize = null_mut();
+                unsafe { edge_addr.store(null_ptr) };
+                VISITED.store(true, Ordering::SeqCst);
+            }
+        }
+    }
+}
+
+pub fn mmtk_weak_ref_stack_call_handlers() {
+    let mut handler_fn = HANDLER_FN.lock().unwrap();
+    if let Some(handler_fn) = handler_fn.as_mut() {
+        handler_fn();
+    }
+}
+
 impl Scanning<ScalaNative> for VMScanning {
     fn scan_roots_in_mutator_thread(
         _tls: VMWorkerThread,
@@ -357,7 +405,7 @@ impl Scanning<ScalaNative> for VMScanning {
 
     fn scan_vm_specific_roots(_tls: VMWorkerThread, mut _factory: impl RootsWorkFactory<ScalaNativeEdge>) {
         unsafe {
-            scan_roots_in_all_mutator_threads(_tls, &mut _factory);
+            // scan_roots_in_all_mutator_threads(_tls, &mut _factory);
             let nodes_closure = to_nodes_closure(&mut _factory);
             let mut roots_closure = RootsClosure::new(nodes_closure);
             mmtk_mark_modules(&mut roots_closure);
@@ -404,10 +452,19 @@ impl Scanning<ScalaNative> for VMScanning {
         ) -> bool {
         #[cfg(feature = "object_pinning")]  
         crate::binding().unpin_pinned_objects();
-        unsafe {
-            ((*UPCALLS).weak_ref_stack_nullify)();
-            ((*UPCALLS).weak_ref_stack_call_handlers)();
-        }
+        debug!("process_weak_refs");
+        _tracer_context.with_tracer(_worker, |object_tracer| {
+            mmtk_weak_ref_stack_nullify(object_tracer);
+        });
+        mmtk_weak_ref_stack_call_handlers();
+        debug!("process_weak_refs done");
         false
+    }
+
+    fn forward_weak_refs(
+            _worker: &mut mmtk::scheduler::GCWorker<ScalaNative>,
+            _tracer_context: impl mmtk::vm::ObjectTracerContext<ScalaNative>,
+    ) {
+        panic!("We can't use MarkCompact in Scala Native.");
     }
 }

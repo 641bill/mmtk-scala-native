@@ -19,6 +19,11 @@ pub struct VMCollection {}
 
 pub const GC_THREAD_KIND_CONTROLLER: libc::c_int = 0;
 pub const GC_THREAD_KIND_WORKER: libc::c_int = 1;
+lazy_static! {
+    pub static ref OFFSET_OF_MUTATOR_CONTEXT: isize = unsafe {
+        ((*UPCALLS).get_mutator_context_offset)() as isize
+    };
+}
 
 #[repr(C)]
 pub struct SendCtxPtr(*mut libc::c_void);
@@ -26,28 +31,40 @@ pub struct SendCtxPtr(*mut libc::c_void);
 unsafe impl Send for SendCtxPtr {}
 
 impl Collection<ScalaNative> for VMCollection {
-    fn stop_all_mutators<F>(_tls: VMWorkerThread, mut _mutator_visitor: F)
+    fn stop_all_mutators<F>(tls: VMWorkerThread, mut _mutator_visitor: F)
     where
         F: FnMut(&'static mut Mutator<ScalaNative>),
     {
-        let result = REQ_SENDER.lock().unwrap().send(SyncRequest::Acquire(_tls, MutatorClosure::from_rust_closure(&mut _mutator_visitor)));
+        let result = REQ_SENDER.lock().unwrap().send(SyncRequest::Acquire(tls));
         match result {
             Err(err) => println!("Failed to send message: {:?}", err),
             _ => ()
         }
+        unsafe {
+            let mut head = ((*UPCALLS).get_mutator_threads)();
+            while !head.is_null() {
+                let node = &*head;
+                let thread = node.value;
+                let mutator_context = thread.offset(*OFFSET_OF_MUTATOR_CONTEXT);
+                // println!("calling closure on thread {:p}", mutator_context);
+                let closure = MutatorClosure::from_rust_closure(&mut _mutator_visitor);
+                (closure.func)(mutator_context as *mut Mutator<ScalaNative>, &closure.data);
+                head = node.next;
+            }
+        }
     }
 
-    fn resume_mutators(_tls: VMWorkerThread) {
-        let result = REQ_SENDER.lock().unwrap().send(SyncRequest::Release(_tls));
+    fn resume_mutators(tls: VMWorkerThread) {
+        let result = REQ_SENDER.lock().unwrap().send(SyncRequest::Release(tls));
         match result {
             Err(err) => println!("Failed to send message: {:?}", err),
             _ => ()
         }        
     }
 
-    fn block_for_gc(_tls: VMMutatorThread) {
+    fn block_for_gc(tls: VMMutatorThread) {
         unsafe {
-            ((*UPCALLS).block_for_gc)();
+            ((*UPCALLS).block_for_gc)(tls);
         }
     }
 

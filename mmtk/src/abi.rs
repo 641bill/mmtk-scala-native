@@ -28,7 +28,7 @@ lazy_static! {
 	static ref WEAK_REF_IDS_MAX: i32 = unsafe {
 		((*UPCALLS).get_weak_ref_ids_max)()
 	};
-	static ref WEAK_REF_FIELD_OFFSET: i32 = unsafe {
+	pub static ref WEAK_REF_FIELD_OFFSET: i32 = unsafe {
 		((*UPCALLS).get_weak_ref_field_offset)()
 	};
 }

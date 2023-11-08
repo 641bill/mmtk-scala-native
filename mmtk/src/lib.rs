@@ -13,6 +13,7 @@ use libc::uintptr_t;
 use mmtk::Mutator;
 use mmtk::util::Address;
 use mmtk::util::alloc::AllocationError;
+use mmtk::vm::ObjectTracer;
 use mmtk::vm::VMBinding;
 use mmtk::MMTKBuilder;
 use mmtk::MMTK;
@@ -107,6 +108,8 @@ pub struct NewBuffer {
 
 use std::marker::PhantomData;
 
+use crate::scanning::is_ptr_aligned;
+
 #[repr(C)]
 pub struct SendPtr<T>(*mut T, PhantomData<T>);
 
@@ -136,6 +139,7 @@ impl MutatorClosure {
         F: FnMut(&'static mut Mutator<ScalaNative>),
     {
         let callback: &mut F = unsafe { &mut *(callback_ptr.0 as *mut F) };
+        debug_assert!(is_ptr_aligned(mutator as *mut usize), "mutator pointer is not aligned");
         callback(unsafe { &mut *mutator });
     }
 }
@@ -185,16 +189,22 @@ pub struct RegsRange {
 }
 
 #[repr(C)]
+pub struct ObjectTracerWrapper<'a> {
+    tracer: &'a dyn ObjectTracer,
+}
+
+#[repr(C)]
 pub struct ScalaNativeUpcalls {
     // collection 
     pub stop_all_mutators: extern "C" fn(
         tls: VMWorkerThread,
-        closure: MutatorClosure,
     ),
     pub resume_mutators: extern "C" fn(
         tls: VMWorkerThread,
     ),
-    pub block_for_gc: extern "C" fn(),
+    pub block_for_gc: extern "C" fn(
+        tls: VMMutatorThread
+    ),
     pub out_of_memory: extern "C" fn(
         tls: VMThread,
         err_kind: AllocationError,
@@ -222,6 +232,7 @@ pub struct ScalaNativeUpcalls {
     pub scan_roots_in_mutator_thread: extern "C" fn(closure: NodesClosure, tls: VMMutatorThread),
     pub scan_vm_specific_roots: extern "C" fn(closure: NodesClosure),
     pub prepare_for_roots_re_scanning: extern "C" fn(),
+    pub sync_weak_ref_stack: extern "C" fn(stack: *const *mut Object, len: usize),
     pub weak_ref_stack_nullify: extern "C" fn(),
     pub weak_ref_stack_call_handlers: extern "C" fn(),
  
@@ -233,6 +244,7 @@ pub struct ScalaNativeUpcalls {
     pub init_gc_worker_thread: extern "C" fn(tls: *mut GCThreadTLS, ctx: SendCtxPtr),
     pub get_gc_thread_tls: extern "C" fn() -> *mut GCThreadTLS,
     pub init_synchronizer_thread: extern "C" fn(),
+    pub get_mutator_context_offset: extern "C" fn() -> usize,
 }
 
 pub static mut UPCALLS: *const ScalaNativeUpcalls = null_mut();

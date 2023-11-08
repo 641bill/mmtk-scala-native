@@ -2,6 +2,7 @@
 #![allow(clippy::not_unsafe_ptr_arg_deref)]
 
 use libc::c_char;
+use libc::c_void;
 use log::debug;
 use log::warn;
 use mmtk::memory_manager::is_mmtk_object;
@@ -34,6 +35,7 @@ use crate::abi::Object;
 use crate::binding::ScalaNativeBinding;
 use crate::edges::ScalaNativeEdge;
 use crate::object_scanning::ClosureWrapper;
+use crate::scanning::HANDLER_FN;
 
 #[no_mangle]
 pub extern "C" fn mmtk_init(min_heap_size: usize, max_heap_size: usize) {
@@ -165,8 +167,13 @@ pub extern "C" fn mmtk_total_bytes() -> usize {
 }
 
 #[no_mangle]
-pub extern "C" fn mmtk_is_live_object(object: ObjectReference) -> bool{
+pub extern "C" fn mmtk_is_live_object(object: ObjectReference) -> bool {
     memory_manager::is_live_object(object)
+}
+
+#[no_mangle]
+pub extern "C" fn mmtk_is_reachable(object: ObjectReference) -> bool {
+    object.is_reachable()
 }
 
 #[cfg(feature = "is_mmtk_object")]
@@ -289,7 +296,7 @@ pub extern "C" fn get_max_non_los_default_alloc_bytes() -> usize {
 
 // Define types for our requests and responses
 pub enum SyncRequest {
-    Acquire(VMWorkerThread, MutatorClosure),
+    Acquire(VMWorkerThread),
     Release(VMWorkerThread),
 }
 
@@ -332,9 +339,9 @@ pub extern "C" fn scalanative_gc_init(calls: *const ScalaNativeUpcalls) {
             let lock = Mutex::new(());
             for req in req_rx {
                 match req {
-                    SyncRequest::Acquire(_tls, _mutator_visitor) => {
+                    SyncRequest::Acquire(_tls) => {
                         let _guard = lock.lock().unwrap();
-                        unsafe { ((*UPCALLS).stop_all_mutators)(_tls, _mutator_visitor) };
+                        unsafe { ((*UPCALLS).stop_all_mutators)(_tls) };
                         res_tx.send(SyncResponse::Acquired).unwrap();
                     }
                     SyncRequest::Release(tls) => {
@@ -398,4 +405,10 @@ pub extern "C" fn get_vo_bit_log_region_size() -> usize {
 #[no_mangle]
 pub extern "C" fn get_vo_bit_base() -> usize {
     mmtk::util::metadata::side_metadata::VO_BIT_SIDE_METADATA_ADDR.as_usize()
+}
+
+#[no_mangle]
+pub extern "C" fn mmtk_weak_ref_stack_set_handler(handler: *mut c_void) {
+    let handler_fn = unsafe { std::mem::transmute::<*mut c_void, fn()>(handler) };
+    *HANDLER_FN.lock().unwrap() = Some(handler_fn);
 }
