@@ -148,7 +148,7 @@ pub fn mmtk_scan_field_and_trace_edges(
 			}
 
 			debug_assert!((*object).size() != 0, "{:p}'s size is 0", object);
-			// Create the work packets here
+			// Update the slot
 			let edge_addr = Address::from_mut_ptr(edge);
 			edge_addr.store(traced);
 		}
@@ -190,7 +190,11 @@ pub fn mmtk_scan_lock_words_and_trace_edges(
 				let node_addr = Address::from_mut_ptr(node);
 				let traced = closure.trace_object(ObjectReference::from_raw_address(node_addr));
 				let traced_ptr: Field_t = traced.to_raw_address().to_mut_ptr();
-				*unsafe { &mut (*(*object).rtti).rt.lock_word } = field_inflate_lock_ref(traced_ptr);
+				// Update the slot
+				unsafe {
+					let edge_addr = Address::from_mut_ptr( &mut (*(*object).rtti).rt.lock_word );
+					edge_addr.store(field_inflate_lock_ref(traced_ptr));
+				}
 			}
 
 			let object_lock: Field_t = unsafe { (*object).lock_word };
@@ -199,7 +203,11 @@ pub fn mmtk_scan_lock_words_and_trace_edges(
 				let node_addr = Address::from_mut_ptr(node);
 				let traced = closure.trace_object(ObjectReference::from_raw_address(node_addr));
 				let traced_ptr: Field_t = traced.to_raw_address().to_mut_ptr();
-				*unsafe { &mut (*object).lock_word } = field_inflate_lock_ref(traced_ptr);
+				// Update the slot
+				unsafe {
+					let edge_addr = Address::from_mut_ptr( &mut (*(*object).rtti).rt.lock_word );
+					edge_addr.store(field_inflate_lock_ref(traced_ptr));
+				}
 			}
 		}
 	}

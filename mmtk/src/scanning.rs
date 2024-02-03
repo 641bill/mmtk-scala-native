@@ -22,6 +22,7 @@ use crate::api::release_buffer;
 use crate::edges::ScalaNativeEdge;
 use atomic::Ordering;
 use log::debug;
+use log::info;
 use mmtk::MutatorContext;
 use mmtk::memory_manager::is_mmtk_object;
 use mmtk::memory_manager::last_heap_address;
@@ -107,9 +108,7 @@ extern "C" fn report_nodes_and_renew_buffer<F: RootsWorkFactory<ScalaNativeEdge>
     factory_ptr: *mut libc::c_void,
 ) -> NewBuffer {
     if !ptr.is_null() {
-        let mut address_buf = unsafe { Vec::<*mut Object>::from_raw_parts(ptr, length, capacity) };
-        let address_set: HashSet<_> = address_buf.drain(..).collect();
-        address_buf.extend(address_set.into_iter());
+        let address_buf = unsafe { Vec::<*mut Object>::from_raw_parts(ptr, length, capacity) };
         let buf: Vec<ObjectReference> = address_buf.into_iter().map(|addr| ObjectReference::from(unsafe { &*addr })).collect();
         let factory: &mut F = unsafe { &mut *(factory_ptr as *mut F) };
         factory.create_process_pinning_roots_work(buf);
@@ -325,8 +324,12 @@ pub unsafe fn mmtk_mark_range(
 }
 
 pub unsafe fn mmtk_mark_program_stack(tls: VMMutatorThread, roots_closure: &mut RootsClosure) {
+    // println!("tls: {:?}", tls);
     let stack_range = ((*UPCALLS).get_stack_range)(tls);
     let regs_range = ((*UPCALLS).get_regs_range)(tls);
+    // println!("stack_range: {:x} - {:x}", stack_range.stack_top as usize, stack_range.stack_bottom as usize);
+    // println!("regs_range: {:x} - {:x}", regs_range.regs as usize, regs_range.regs.add(regs_range.regs_size) as usize);
+    
     mmtk_mark_range(stack_range.stack_top, 
         stack_range.stack_bottom, roots_closure);
     mmtk_mark_range(regs_range.regs, 
@@ -363,16 +366,21 @@ pub fn mmtk_weak_ref_stack_nullify(closure: &mut impl mmtk::vm::ObjectTracer) {
     while !weak_ref_stack_is_empty() {
         let weak_ref = weak_ref_stack_pop().unwrap();
         let object = weak_ref.0;
+        let object_ref = ObjectReference::from_raw_address(Address::from_mut_ptr(object));
+        let traced = closure.trace_object(object_ref);
+        let traced_obj = Obj::from(traced);
+        let fields = traced_obj.get_fields();
         let field_offset = *WEAK_REF_FIELD_OFFSET;
-        if is_word_in_heap(object as *mut usize) {
-            let object_ref = ObjectReference::from_raw_address(Address::from_mut_ptr(object));
-            if !object_ref.is_reachable() {
-                let traced = closure.trace_object(object_ref);
-                let traced_obj = Obj::from(traced);
-		        let fields = traced_obj.get_fields();
-				let edge = unsafe { fields.offset(field_offset as isize) };
+        let edge = unsafe { fields.offset(field_offset as isize) };
+        let ref_object = unsafe { *edge };
+        let ref_object_ref = ObjectReference::from_raw_address(Address::from_mut_ptr(ref_object));
+        let traced_ref_object = closure.trace_object(ref_object_ref);
+        if is_word_in_heap(ref_object as *mut usize) {
+            // println!("weak_ref_stack_nullify: {:x}", ref_object as usize);
+            if !traced_ref_object.is_reachable() {
                 let edge_addr = Address::from_mut_ptr(edge);
                 let null_ptr: *mut usize = null_mut();
+                // info!("Nullifying weak ref: {:x}", edge_addr.as_usize());
                 unsafe { edge_addr.store(null_ptr) };
                 VISITED.store(true, Ordering::SeqCst);
             }
@@ -383,6 +391,7 @@ pub fn mmtk_weak_ref_stack_nullify(closure: &mut impl mmtk::vm::ObjectTracer) {
 pub fn mmtk_weak_ref_stack_call_handlers() {
     let mut handler_fn = HANDLER_FN.lock().unwrap();
     if let Some(handler_fn) = handler_fn.as_mut() {
+        // info!("Calling weak ref handler");
         handler_fn();
     }
 }
@@ -405,7 +414,7 @@ impl Scanning<ScalaNative> for VMScanning {
 
     fn scan_vm_specific_roots(_tls: VMWorkerThread, mut _factory: impl RootsWorkFactory<ScalaNativeEdge>) {
         unsafe {
-            // scan_roots_in_all_mutator_threads(_tls, &mut _factory);
+            scan_roots_in_all_mutator_threads(_tls, &mut _factory);
             let nodes_closure = to_nodes_closure(&mut _factory);
             let mut roots_closure = RootsClosure::new(nodes_closure);
             mmtk_mark_modules(&mut roots_closure);
@@ -453,10 +462,10 @@ impl Scanning<ScalaNative> for VMScanning {
         #[cfg(feature = "object_pinning")]  
         crate::binding().unpin_pinned_objects();
         debug!("process_weak_refs");
-        _tracer_context.with_tracer(_worker, |object_tracer| {
-            mmtk_weak_ref_stack_nullify(object_tracer);
-        });
-        mmtk_weak_ref_stack_call_handlers();
+        // _tracer_context.with_tracer(_worker, |object_tracer| {
+        //     mmtk_weak_ref_stack_nullify(object_tracer);
+        // });
+        // mmtk_weak_ref_stack_call_handlers();
         debug!("process_weak_refs done");
         false
     }

@@ -203,6 +203,10 @@ extern bool mmtk_is_reachable(void* ref);
 
 extern void mmtk_weak_ref_stack_set_handler(void* handler);
 
+extern void mmtk_harness_begin(void* tls);
+
+extern void mmtk_harness_end();
+
 /**
  * VM Accounting
  */

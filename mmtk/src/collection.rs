@@ -40,18 +40,20 @@ impl Collection<ScalaNative> for VMCollection {
             Err(err) => println!("Failed to send message: {:?}", err),
             _ => ()
         }
-        unsafe {
-            let mut head = ((*UPCALLS).get_mutator_threads)();
-            while !head.is_null() {
-                let node = &*head;
-                let thread = node.value;
-                let mutator_context = thread.offset(*OFFSET_OF_MUTATOR_CONTEXT);
-                // println!("calling closure on thread {:p}", mutator_context);
-                let closure = MutatorClosure::from_rust_closure(&mut _mutator_visitor);
-                (closure.func)(mutator_context as *mut Mutator<ScalaNative>, &closure.data);
-                head = node.next;
-            }
-        }
+        // unsafe {
+        //     let mut head = ((*UPCALLS).get_mutator_threads)();
+        //     while !head.is_null() {
+        //         println!("head: {:p}", head);
+        //         let node = &*head;
+        //         let thread = node.value;
+        //         let mutator_context = thread.offset(*OFFSET_OF_MUTATOR_CONTEXT);
+        //         println!("Offset of mutator context: {}", *OFFSET_OF_MUTATOR_CONTEXT);
+        //         println!("calling closure on thread {:p}", mutator_context);
+        //         let closure = MutatorClosure::from_rust_closure(&mut _mutator_visitor);
+        //         (closure.func)(mutator_context as *mut Mutator<ScalaNative>, &closure.data);
+        //         head = node.next;
+        //     }
+        // }
     }
 
     fn resume_mutators(tls: VMWorkerThread) {
